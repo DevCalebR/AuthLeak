@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AuthLeak | Local Scanner</title><script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100">
+  <main class="mx-auto max-w-7xl p-5 md:p-10">
+    <header class="mb-8 flex flex-col gap-3 border-b border-slate-800 pb-6 md:flex-row md:items-center md:justify-between">
+      <div><p class="text-xs font-bold uppercase tracking-[.3em] text-cyan-400">Authorized security testing</p><h1 class="text-4xl font-black tracking-tight">Auth<span class="text-cyan-400">Leak</span></h1></div>
+      <div id="status" class="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-300">Ready for a local scan</div>
+    </header>
+    <div class="grid gap-6 lg:grid-cols-2">
+      <section class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-2xl shadow-cyan-950/20">
+        <h2 class="mb-5 text-xl font-bold">Scan configuration</h2>
+        <form id="scan-form" class="space-y-4">
+          <label class="block text-sm font-medium">Target URL<input required name="target_url" type="url" placeholder="https://app.example.test" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 outline-none focus:border-cyan-400"></label>
+          <label class="block text-sm font-medium">API endpoint <span class="text-slate-500">(optional TokenSwap test)</span><input name="api_endpoint" type="url" placeholder="https://api.example.test/v1/users/42" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 outline-none focus:border-cyan-400"></label>
+          <label class="block text-sm font-medium">Victim-shaped JSON payload<textarea name="payload" rows="3" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 font-mono text-xs outline-none focus:border-cyan-400">{}</textarea></label>
+          <div class="grid gap-4 md:grid-cols-2"><label class="block text-sm font-medium">Token A (victim reference)<input name="victim_token" type="password" autocomplete="off" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 outline-none focus:border-cyan-400"></label><label class="block text-sm font-medium">Token B (attacker header)<input name="attacker_token" type="password" autocomplete="off" placeholder="Bearer …" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 outline-none focus:border-cyan-400"></label></div>
+          <label class="block text-sm font-medium">Victim response criteria<input name="victim_criteria" placeholder="victim@example.test" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 outline-none focus:border-cyan-400"></label>
+          <button id="scan-button" class="w-full rounded-lg bg-cyan-400 px-4 py-3 font-bold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-50">Start authorized scan</button>
+        </form>
+      </section>
+      <section class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6"><h2 class="mb-4 text-xl font-bold">Live terminal</h2><pre id="terminal" class="h-[420px] overflow-y-auto rounded-lg bg-black p-4 font-mono text-xs leading-6 text-emerald-400">$ AuthLeak dashboard connected</pre></section>
+    </div>
+    <section class="mt-8"><div class="mb-4 flex items-center justify-between"><h2 class="text-2xl font-bold">Findings</h2><span id="finding-count" class="text-sm text-slate-400">0 results</span></div><div id="results" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3"><p class="text-slate-500">Run a scan to populate results.</p></div></section>
+  </main>
+  <dialog id="detail" class="w-[min(900px,94vw)] rounded-2xl border border-slate-700 bg-slate-900 p-0 text-slate-100 backdrop:bg-black/70"><article class="p-6"><button onclick="detail.close()" class="float-right rounded bg-slate-800 px-3 py-1">Close</button><h2 id="detail-title" class="text-2xl font-bold"></h2><p id="detail-description" class="mt-3 text-slate-300"></p><p id="detail-evidence" class="mt-3 rounded bg-amber-950/40 p-3 font-mono text-xs text-amber-300"></p><h3 class="mt-5 font-bold text-cyan-400">cURL reproduction</h3><pre id="detail-curl" class="mt-2 overflow-x-auto rounded bg-black p-4 text-xs"></pre><h3 class="mt-5 font-bold text-cyan-400">Python reproduction</h3><pre id="detail-python" class="mt-2 overflow-x-auto rounded bg-black p-4 text-xs"></pre><h3 class="mt-5 font-bold text-cyan-400">Remediation</h3><pre id="detail-remediation" class="mt-2 whitespace-pre-wrap rounded bg-slate-950 p-4 text-xs"></pre></article></dialog>
+  <script>
+    const terminal=document.querySelector('#terminal'),results=document.querySelector('#results'),status=document.querySelector('#status'),form=document.querySelector('#scan-form'),button=document.querySelector('#scan-button'),detail=document.querySelector('#detail');let currentJob=null;
+    const log=text=>{terminal.textContent+=text+'\\n';terminal.scrollTop=terminal.scrollHeight};const socket=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws/logs`);socket.onmessage=event=>{const data=JSON.parse(event.data);if(!currentJob||data.job_id===currentJob)log(data.message)};socket.onopen=()=>log('[connected] real-time log stream ready');socket.onclose=()=>log('[warn] log stream disconnected');
+    function showFinding(f){document.querySelector('#detail-title').textContent=`${f.title} — CVSS ${f.cvss}`;document.querySelector('#detail-description').textContent=f.description;document.querySelector('#detail-evidence').textContent=`Evidence: ${f.evidence}\\nSource: ${f.source}`;document.querySelector('#detail-curl').textContent=f.curl;document.querySelector('#detail-python').textContent=f.python;document.querySelector('#detail-remediation').textContent=f.remediation;detail.showModal()}
+    function escapeHtml(value){const d=document.createElement('div');d.textContent=value;return d.innerHTML}function render(findings){document.querySelector('#finding-count').textContent=`${findings.length} result${findings.length===1?'':'s'}`;results.replaceChildren();if(!findings.length){results.innerHTML='<p class="text-slate-500">No findings were confirmed by the configured checks.</p>';return}findings.forEach(f=>{const card=document.createElement('button');card.className='rounded-xl border border-slate-700 bg-slate-900 p-5 text-left transition hover:border-cyan-400 hover:bg-slate-800';card.innerHTML=`<div class="flex justify-between gap-3"><h3 class="font-bold">${escapeHtml(f.title)}</h3><span class="rounded bg-rose-950 px-2 py-1 text-xs text-rose-300">${f.severity}</span></div><p class="mt-3 text-sm text-slate-400">${escapeHtml(f.description)}</p><p class="mt-4 font-mono text-xs text-cyan-400">CVSS ${f.cvss} · View reproduction →</p>`;card.onclick=()=>showFinding(f);results.append(card)})}
+    async function poll(job){const response=await fetch(`/api/scans/${job}`);const data=await response.json();if(data.status==='running')return setTimeout(()=>poll(job),700);button.disabled=false;status.textContent=data.status==='complete'?'Scan complete':`Scan error: ${data.error}`;if(data.status==='complete')render(data.findings)}
+    form.onsubmit=async event=>{event.preventDefault();const config=Object.fromEntries(new FormData(form));button.disabled=true;status.textContent='Scan running…';terminal.textContent='$ AuthLeak scan started\\n';render([]);const response=await fetch('/api/scans',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(config)});const data=await response.json();if(!response.ok){button.disabled=false;status.textContent=data.detail||'Unable to start scan';log('[error] '+status.textContent);return}currentJob=data.job_id;poll(currentJob)};
+  </script>
+</body>
+</html>
