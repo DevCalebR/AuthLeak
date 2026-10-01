@@ -1,0 +1,23 @@
+# --- AuthLeak Specific Exclusions ---
+*.json
+*.log
+*auth_tokens*
+*targets*
+reports/
+out/
+
+# --- Python Environment & Caching ---
+__pycache__/
+*.py[cod]
+*\$py.class
+.pytest_cache/
+
+# --- Virtual Environments ---
+.venv/
+venv/
+ENV/
+env/
+
+# --- Operating System Artifacts ---
+.DS_Store
+Thumbs.db
