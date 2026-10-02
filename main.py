@@ -109,11 +109,13 @@ async def harvest_status(job_id: str) -> dict[str, Any]:
 
 
 @app.get("/api/sessions/status")
-async def stored_sessions(target_url: str) -> dict[str, bool | str]:
-    try:
-        return session_status(target_url)
-    except ValueError as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
+async def stored_sessions():
+    from pathlib import Path
+    sessions_dir = Path(__file__).parent / "sessions"
+    return {
+        "victim": (sessions_dir / "session_victim.json").exists(),
+        "attacker": (sessions_dir / "session_attacker.json").exists()
+        }
 
 
 @app.websocket("/ws/logs")

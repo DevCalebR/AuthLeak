@@ -5,251 +5,212 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-import shlex
-from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Literal
-from urllib.parse import urlparse
-
+from playwright.async_api import async_playwright, Request, Response
+from bs4 import BeautifulSoup
 import httpx
-from playwright.async_api import BrowserContext, Page, Request, async_playwright
 
 LogCallback = Callable[[str], Awaitable[None]]
 SessionType = Literal["victim", "attacker"]
-SESSIONS_DIR = Path(__file__).with_name("sessions")
-API_PATH_MARKER = re.compile(r"/(?:api|v1|v2)(?:/|$)|/\d+/?$", re.IGNORECASE)
+SESSIONS_DIR = Path(__file__).parent / "sessions"
 AUTH_HEADER_NAMES = {"authorization", "cookie", "x-api-key", "x-auth-token"}
-SECRET_PATTERNS = {
-    "AWS Access Key": r"AKIA[0-9A-Z]{16}",
-    "Stripe API Key": r"sk_live_[0-9a-zA-Z]{24}",
-    "Google API Key": r"AIza[0-9A-Za-z-_]{35}",
-    "Generic Bearer Token": r"bearer\s*[a-zA-Z0-9_\-\.]{20,}",
-}
 
+# Shared findings cache and session status tracks
+findings_db = []
+session_status: dict[str, str] = {}
 
-@dataclass
-class Finding:
-    title: str
-    severity: str
-    cvss: float
-    description: str
-    evidence: str
-    source: str
-    curl: str
-    python: str
-    remediation: str
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-
-def validate_url(value: str, field: str = "Target URL") -> str:
-    parsed = urlparse(value)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise ValueError(f"{field} must be an absolute HTTP(S) URL.")
-    return value
-
-
-def target_folder(target_url: str) -> Path:
-    """Return the target-specific profile directory without allowing path traversal."""
-    domain = urlparse(validate_url(target_url)).hostname or "unknown_target"
-    safe_domain = re.sub(r"[^A-Za-z0-9]+", "_", domain).strip("_").lower()
-    return SESSIONS_DIR / (safe_domain or "unknown_target")
-
-
-def session_path(target_url: str, session_type: SessionType) -> Path:
-    if session_type not in {"victim", "attacker"}:
-        raise ValueError("session_type must be 'victim' or 'attacker'.")
-    return target_folder(target_url) / f"session_{session_type}.json"
-
-
-def session_status(target_url: str) -> dict[str, bool | str]:
-    folder = target_folder(target_url)
-    return {
-        "target_folder": f"sessions/{folder.name}",
-        "victim_stored": _load_session_headers(target_url, "victim") is not None,
-        "attacker_stored": _load_session_headers(target_url, "attacker") is not None,
-    }
-
+def validate_url(url: str, label: str = "URL") -> None:
+    """Helper validation rule to check web formats."""
+    if not url.startswith(("http://", "https://")):
+        raise ValueError(f"Invalid {label}: Must begin with http:// or https://")
 
 def _auth_headers(headers: dict[str, str]) -> dict[str, str]:
-    return {name: value for name, value in headers.items() if name.lower() in AUTH_HEADER_NAMES and value.strip()}
+    """Filters dictionary keys down to known security credentials."""
+    return {k: v for k, v in headers.items() if k.lower() in AUTH_HEADER_NAMES}
 
-
-def _save_session(target_url: str, session_type: SessionType, headers: dict[str, str], request_url: str) -> Path:
-    destination = session_path(target_url, session_type)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "target_url": target_url,
-        "captured_from": request_url,
-        "captured_at": datetime.now(UTC).isoformat(),
-        "headers": headers,
+async def harvest_session(
+    login_url: str, 
+    session_type: SessionType, 
+    log_cb: LogCallback
+) -> dict[str, Any]:
+    """
+    Spawns a visible browser window, intercepts authorization headers or 
+    incoming 'Set-Cookie' headers during authentication, saves the extracted 
+    profile to disk, and snaps the window shut instantly.
+    """
+    SESSIONS_DIR.mkdir(exist_ok=True)
+    session_id = f"{session_type}_{int(asyncio.get_event_loop().time())}"
+    session_status[session_id] = "harvesting"
+    
+    await log_cb(f"[+] Launching active session harvester for {session_type.upper()} at {login_url}...")
+    
+    auth_captured = asyncio.Event()
+    captured_data: dict[str, Any] = {
+        "headers": {},
+        "cookies": [],
+        "captured_at": ""
     }
-    destination.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    return destination
 
-
-async def harvest_session(target_url: str, session_type: SessionType, log: LogCallback) -> Path:
-    """Open an operator-visible login browser and persist the first auth-bearing request."""
-    validate_url(target_url, "Login URL")
-    profile_path = session_path(target_url, session_type)
-    captured: asyncio.Future[tuple[dict[str, str], str]] = asyncio.get_running_loop().create_future()
-
-    def intercept(request: Request) -> None:
-        if captured.done():
+    async def handle_request(request: Request):
+        if auth_captured.is_set():
             return
-        headers = _auth_headers(dict(request.headers))
-        if headers:
-            captured.set_result((headers, request.url))
+        try:
+            headers = await request.all_headers()
+            for name, value in headers.items():
+                if name.lower() in AUTH_HEADER_NAMES:
+                    captured_data["headers"][name] = value
+                    await log_cb(f"[!] Intercepted outbound auth header: {name}")
+                    auth_captured.set()
+        except Exception:
+            pass
 
-    def inspect_response(response: Any) -> None:
-        """Also inspect the response's originating request for auth-bearing headers."""
-        intercept(response.request)
+    async def handle_response(response: Response):
+        if auth_captured.is_set():
+            return
+        try:
+            headers = await response.all_headers()
+            if "set-cookie" in headers:
+                await log_cb("[!] Intercepted incoming authentication cookie stream ('Set-Cookie')")
+                context = response.frame.page.context
+                captured_data["cookies"] = await context.cookies([response.url])
+                
+                if captured_data["cookies"]:
+                    cookie_string = "; ".join([f"{c['name']}={c['value']}" for c in captured_data["cookies"]])
+                    captured_data["headers"]["cookie"] = cookie_string
+                    
+                auth_captured.set()
+        except Exception:
+            pass
 
-    await log(f"[harvest] opening headed Chromium for {session_type} login at {target_url}")
-    async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=False)
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=False)
         context = await browser.new_context()
         page = await context.new_page()
-        page.on("request", intercept)
-        page.on("response", inspect_response)
+
+        page.on("request", handle_request)
+        page.on("response", handle_response)
+
         try:
-            await page.goto(target_url, wait_until="domcontentloaded", timeout=30_000)
-            headers, request_url = await captured
-            saved_path = _save_session(target_url, session_type, headers, request_url)
-            await log(f"[harvest] {session_type} profile stored at {saved_path}")
-            # The request callback resolves `captured` immediately; close on the next await.
-            await page.close()
-            await browser.close()
-            return saved_path
-        finally:
-            if not page.is_closed():
-                await page.close()
-            if browser.is_connected():
-                await browser.close()
+            await page.goto(login_url, wait_until="domcontentloaded")
+            
+            try:
+                await asyncio.wait_for(auth_captured.wait(), timeout=300.0)
+                await log_cb("[+] Authentication signature extracted successfully. Terminating context.")
+            except asyncio.TimeoutError:
+                await log_cb("[-] Session harvest timed out after 5 minutes without identifying authorization state.")
+                session_status[session_id] = "failed"
+                return {}
 
+            captured_data["captured_at"] = datetime.now().isoformat()
+            
+            # FIXED: Save directly to base sessions directory so main.py status endpoint finds it
+            output_file = SESSIONS_DIR / f"session_{session_type.lower()}.json"
+            output_file.write_text(json.dumps(captured_data, indent=2))
+            await log_cb(f"[+] Saved structured credentials to {output_file.name}")
+            
+            session_status[session_id] = "completed"
+            return captured_data
 
-def _load_session_headers(target_url: str, session_type: SessionType) -> dict[str, str] | None:
-    path = session_path(target_url, session_type)
-    if not path.is_file():
-        return None
-    try:
-        profile = json.loads(path.read_text(encoding="utf-8"))
-        headers = profile.get("headers", {})
-        authenticated_headers = _auth_headers(headers) if isinstance(headers, dict) else {}
-        return authenticated_headers or None
-    except (OSError, json.JSONDecodeError):
-        return None
-
-
-def _is_api_endpoint(url: str) -> bool:
-    parsed = urlparse(url)
-    return parsed.scheme in {"http", "https"} and bool(API_PATH_MARKER.search(parsed.path))
-
-
-async def crawl_target(target_url: str, log: LogCallback) -> tuple[list[str], list[str]]:
-    """Use a headless browser to map scripts and API-shaped outgoing requests."""
-    endpoints: set[str] = set()
-
-    def inspect_request(request: Request) -> None:
-        if _is_api_endpoint(request.url):
-            endpoints.add(request.url)
-
-    async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=True)
-        context: BrowserContext = await browser.new_context()
-        page: Page = await context.new_page()
-        page.on("request", inspect_request)
-        try:
-            await page.goto(target_url, wait_until="networkidle", timeout=30_000)
-            scripts = await page.locator("script[src]").evaluate_all("items => items.map(item => item.src)")
-            await log(f"[crawl] mapped {len(endpoints)} API endpoint(s) and {len(scripts)} script(s)")
-            return list(dict.fromkeys(scripts)), sorted(endpoints)
         finally:
             await context.close()
             await browser.close()
 
+async def autonomous_crawl_and_scan(target_url: Any, response_criteria: str, victim_token: str = None, attacker_token: str = None):
+    """Core autonomous scanner engine linking Playwright with fuzzer arrays."""
+    # FIXED: Safely extract the target string if a configuration dictionary context block is received
+    url_str = target_url.get("target_url") if isinstance(target_url, dict) else str(target_url)
+    print(f"[start] Launching headless browser for: {url_str}")
+    
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        discovered_apis = set()
+        
+        async def handle_request(request):
+            url = request.url
+            if any(x in url for x in ["/api/", "/v1/", "/v2/"]) or re.search(r'/\d+(?=/|$)', url):
+                discovered_apis.add(url)
+                print(f"[discovered] Found dynamic API route: {url}")
 
-async def analyze_javascript(script_urls: list[str], client: httpx.AsyncClient, log: LogCallback) -> list[Finding]:
-    async def fetch(url: str) -> tuple[str, str]:
+        page.on("request", handle_request)
+        
         try:
-            response = await client.get(url)
-            response.raise_for_status()
-            return url, response.text
-        except httpx.HTTPError as error:
-            await log(f"[warn] unable to download {url}: {error}")
-            return url, ""
+            await page.goto(url_str, wait_until="networkidle", timeout=15000)
+            content = await page.content()
+        except Exception as e:
+            print(f"[error] Browser navigation failed: {e}")
+            content = ""
+            
+        # ENGINE A: Secrets Scanner
+        soup = BeautifulSoup(content, 'html.parser')
+        scripts = [script.get('src') for script in soup.find_all('script') if script.get('src')]
+        
+        async with httpx.AsyncClient() as client:
+            for script_src in scripts:
+                full_script_url = script_src if script_src.startswith('http') else f"{url_str.rstrip('/')}/{script_src.lstrip('/')}"
+                try:
+                    res = await client.get(full_script_url, timeout=10)
+                    js_code = res.text
+                    
+                    secrets = {
+                        "AWS Access Key": re.findall(r'AKIA[0-9A-Z]{16}', js_code),
+                        "Stripe API Key": re.findall(r'sk_live_[0-9a-zA-Z]{24}', js_code),
+                        "Google API Key": re.findall(r'AIza[0-9A-Za-z-_]{35}', js_code)
+                    }
+                    
+                    for name, matches in secrets.items():
+                        for match in matches:
+                            finding = {
+                                "type": "Exposed Secret / Information Disclosure",
+                                "title": f"Leaked {name}",
+                                "severity": "High",
+                                "evidence": f"Found inside asset: {full_script_url}",
+                                "poc_curl": f"curl -s {full_script_url}",
+                                "remediation": "### Secure Fix\nMove keys to environment variables. Never bundle keys into client bundles."
+                            }
+                            if finding not in findings_db:
+                                findings_db.append(finding)
+                except Exception:
+                    continue
 
-    findings: list[Finding] = []
-    for source, content in await asyncio.gather(*(fetch(url) for url in script_urls)):
-        for kind, pattern in SECRET_PATTERNS.items():
-            for evidence in dict.fromkeys(re.findall(pattern, content, re.IGNORECASE)):
-                findings.append(Finding(
-                    title=f"Exposed {kind}", severity="high", cvss=7.5,
-                    description="A credential-shaped value was found in a browser-discovered JavaScript asset.",
-                    evidence=evidence, source=source,
-                    curl=f"curl -s {shlex.quote(source)} | grep -i {shlex.quote(evidence)}",
-                    python=f"import requests\n\nasset = requests.get({source!r}, timeout=15).text\nprint({evidence!r} in asset)\n",
-                    remediation="Rotate the credential, remove it from browser assets, and enforce secret scanning in the build pipeline.",
-                ))
-    return findings
-
-
-async def token_swap_fuzz(endpoint: str, payload: Any, attacker_headers: dict[str, str], victim_criteria: str, client: httpx.AsyncClient, log: LogCallback) -> Finding | None:
-    if not attacker_headers or not victim_criteria:
-        return None
-    try:
-        response = await client.post(endpoint, headers=attacker_headers, json=payload)
-    except httpx.HTTPError as error:
-        await log(f"[warn] TokenSwap request failed for {endpoint}: {error}")
-        return None
-    if response.status_code == 200 and victim_criteria.lower() in response.text.lower():
-        curl_headers = " ".join(
-            f"-H {shlex.quote(f'{name}: {value}')}" for name, value in attacker_headers.items()
-        )
-        return Finding(
-            title="Potential IDOR / Token Swap", severity="critical", cvss=9.1,
-            description="The attacker session received victim-identifying content for a victim-shaped request.",
-            evidence=f"HTTP 200; matched criteria: {victim_criteria}", source=endpoint,
-            curl=(f"curl -i -X POST {shlex.quote(endpoint)} {curl_headers} "
-                  f"-H 'Content-Type: application/json' --data {shlex.quote(json.dumps(payload))}"),
-            python=f"import requests\n\nresponse = requests.post({endpoint!r}, headers={attacker_headers!r}, json={payload!r}, timeout=15)\nprint(response.status_code, response.text)\n",
-            remediation="Authorize each object on the server against the authenticated principal and return 403 for cross-user access.",
-        )
-    return None
-
-
-async def autonomous_crawl_and_scan(config: dict[str, Any], log: LogCallback) -> list[dict[str, Any]]:
-    """Crawl a target and prefer pre-harvested local session profiles for TokenSwap."""
-    target_url = validate_url(str(config.get("target_url", "")))
-    victim_headers = _load_session_headers(target_url, "victim")
-    attacker_headers = _load_session_headers(target_url, "attacker")
-    if victim_headers and attacker_headers:
-        await log("[sessions] using pre-harvested victim and attacker profiles for TokenSwap.")
-    else:
-        manual_attacker = str(config.get("attacker_token", "")).strip()
-        attacker_headers = {"Authorization": manual_attacker} if manual_attacker else None
-        victim_headers = {"Authorization": str(config.get("victim_token", "")).strip()} if config.get("victim_token") else None
-        await log("[sessions] using manually supplied token values; no complete stored profile pair found.")
-
-    scripts, mapped_endpoints = await crawl_target(target_url, log)
-    configured_endpoint = str(config.get("api_endpoint", "")).strip()
-    endpoints = list(dict.fromkeys(([configured_endpoint] if configured_endpoint else []) + mapped_endpoints))
-    timeout = httpx.Timeout(15.0, connect=8.0)
-    findings: list[Finding] = []
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-        findings.extend(await analyze_javascript(scripts, client, log))
-        if endpoints and victim_headers and attacker_headers:
+        # ENGINE B: TokenSwap / Automated Fuzzer Engine
+        # FIXED: Look directly in base sessions directory matching frontend tracking rules
+        local_attacker_headers = {}
+        if not attacker_token and (SESSIONS_DIR / "session_attacker.json").exists():
             try:
-                payload = json.loads(str(config.get("payload", "{}")))
-            except json.JSONDecodeError as error:
-                await log(f"[error] invalid TokenSwap JSON payload: {error}")
-            else:
-                checks = [token_swap_fuzz(endpoint, payload, attacker_headers, str(config.get("victim_criteria", "")), client, log) for endpoint in endpoints]
-                findings.extend(item for item in await asyncio.gather(*checks) if item)
-    await log(f"[complete] scan finished with {len(findings)} finding(s)")
-    return [finding.to_dict() for finding in findings]
+                prof = json.loads((SESSIONS_DIR / "session_attacker.json").read_text())
+                local_attacker_headers = prof.get("headers", {})
+            except Exception:
+                pass
+        else:
+            local_attacker_headers = {"Authorization": attacker_token} if attacker_token else {}
 
+        active_headers = local_attacker_headers
+        if active_headers:
+            for api_url in discovered_apis:
+                print(f"[tokenswap] Fuzzing authorization bounds on endpoint: {api_url}")
+                try:
+                    async with httpx.AsyncClient() as client:
+                        headers = {"Content-Type": "application/json"}
+                        headers.update(active_headers)
+                        response = await client.post(api_url, headers=headers, json={}, timeout=10)
+                        
+                        if response.status_code == 200 and response_criteria in response.text:
+                            finding = {
+                                "type": "Broken Object Level Authorization (IDOR)",
+                                "title": "Potential IDOR / Token Swap Bypass",
+                                "severity": "Critical",
+                                "evidence": f"HTTP 200; matched response criteria: '{response_criteria}'\nSource: {api_url}",
+                                "poc_curl": f"curl -i -X POST {api_url} -H 'Cookie: {active_headers.get('cookie', '')}'",
+                                "remediation": "### Secure Fix\nValidate session principal ownership bounds explicitly on object mutations."
+                            }
+                            if finding not in findings_db:
+                                findings_db.append(finding)
+                except Exception as e:
+                    print(f"[tokenswap error] Connection failed on endpoint {api_url}: {e}")
 
-run_scan = autonomous_crawl_and_scan
+        await browser.close()
+    return findings_db
+
