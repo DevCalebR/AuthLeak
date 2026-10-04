@@ -16,6 +16,9 @@ from pydantic import BaseModel, Field
 
 from program_intelligence import build_recommendations, fetch_scope_exclusions, fetch_structured_scopes
 
+from asset_inventory import AssetInventory
+from scope_policy import ScopePolicy
+
 from scanner import (
     autonomous_crawl_and_scan,
     bind_scan_context,
@@ -125,6 +128,7 @@ async def execute_scan(job_id: str, config: ScanConfig) -> None:
     try:
         tenant = tenant_from_url(config.target_url)
         await publish(job_id, f"[start] Manual scan target: {config.target_url}")
+        inventory = AssetInventory()
         findings = await autonomous_crawl_and_scan(
             config.model_dump(),
             response_criteria=config.victim_criteria,
@@ -132,12 +136,14 @@ async def execute_scan(job_id: str, config: ScanConfig) -> None:
             attacker_token=config.attacker_token or None,
             tenant=tenant,
             log_cb=lambda message: publish(job_id, message),
+            inventory=inventory,
         )
         report = write_markdown_report(findings, tenant, report_prefix="manual")
         jobs[job_id].update(
             status="complete",
             findings=findings,
             report=str(report),
+            inventory=inventory.to_dict(),
         )
         await publish(job_id, f"[complete] Manual scan report: {report.name}")
     except Exception as error:
@@ -240,15 +246,14 @@ async def fetch_hackerone_structured_scopes(
                 asset_identifier = attributes.get("asset_identifier")
                 if not isinstance(asset_identifier, str) or not asset_identifier.strip():
                     continue
-                try:
-                    validate_url(asset_identifier, "HackerOne asset")
-                except ValueError:
+                normalized = asset_identifier.strip()
+                parsed_rule_policy = ScopePolicy.from_identifiers([normalized])
+                if not parsed_rule_policy.rules:
                     await log_cb(
-                        f"[hackerone] Dropped malformed URL scope: {asset_identifier!r}"
+                        f"[hackerone] Dropped malformed or unsupported URL scope: {asset_identifier!r}"
                     )
                     continue
 
-                normalized = asset_identifier.strip()
                 if normalized not in imported_urls:
                     imported_urls.append(normalized)
                     eligible_in_page += 1
@@ -292,28 +297,38 @@ async def execute_hackerone_sync(
             slug,
             sync_log,
         )
+        scope_policy = ScopePolicy.from_identifiers(scopes)
+        scan_targets = scope_policy.concrete_targets()
+
         hackerone_jobs[job_id].update(
-            status="scanning" if scopes else "complete",
+            status="scanning" if scan_targets else "complete",
             program_slug=slug,
             imported_assets=len(scopes),
-            total=len(scopes),
+            total=len(scan_targets),
             completed=0,
             failed=0,
             current=None,
+            scope=scope_policy.describe(),
         )
         await publish(
             job_id,
-            f"[sync] Scope ingestion complete: {len(scopes)} eligible URL assets imported",
+            f"[sync] Scope ingestion complete: {len(scopes)} eligible URL scope rules imported; "
+            f"{len(scan_targets)} concrete scan seeds available",
         )
 
-        if not scopes:
+        if not scan_targets:
             report = write_markdown_report([], slug, report_prefix="hackerone")
             hackerone_jobs[job_id].update(
                 status="complete",
                 findings=[],
                 report=str(report),
+                inventory=AssetInventory().to_dict(),
             )
-            await publish(job_id, "[complete] No eligible URL assets were available to scan")
+            await publish(
+                job_id,
+                "[complete] No concrete scan seed was available. Wildcard/path rules were retained "
+                "as authorization policy without inventing targets.",
+            )
             return
 
         response_criteria = H1_RESPONSE_CRITERIA
@@ -333,17 +348,24 @@ async def execute_hackerone_sync(
 
         async def batch_progress(update: dict[str, Any]) -> None:
             hackerone_jobs[job_id].update(
-                total=update.get("total", len(scopes)),
+                total=update.get("total", len(scan_targets)),
                 completed=update.get("completed", 0),
                 failed=update.get("failed", 0),
                 current=update.get("current"),
                 findings_count=update.get("findings", 0),
+                inventory=update.get("inventory", hackerone_jobs[job_id].get("inventory", {})),
                 status=update.get("status", "scanning"),
             )
 
+        batch_inventory = AssetInventory()
         context_token = bind_scan_context(slug, batch_log, batch_progress)
         try:
-            findings = await sequential_batch_scan(scopes, response_criteria)
+            findings = await sequential_batch_scan(
+                scan_targets,
+                response_criteria,
+                scope_policy=scope_policy,
+                inventory=batch_inventory,
+            )
         finally:
             reset_scan_context(context_token)
 
@@ -354,6 +376,8 @@ async def execute_hackerone_sync(
             findings=findings,
             findings_count=len(findings),
             report=str(report),
+            inventory=batch_inventory.to_dict(),
+            scope=scope_policy.describe(),
         )
         await publish(job_id, f"[complete] HackerOne batch finished; report: {report.name}")
     except Exception as error:
