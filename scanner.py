@@ -439,6 +439,98 @@ def _merge_headers(base: dict[str, str], overlay: dict[str, str]) -> dict[str, s
         merged[key] = value
     return merged
 
+async def replay_authenticated_endpoints(
+    inventory: AssetInventory,
+    session_type: SessionType,
+    *,
+    target_url: str | None = None,
+    tenant: str | None = None,
+    scope_policy: ScopePolicy | None = None,
+    log_cb: LogCallback | None = None,
+) -> list[AuthenticatedObservation]:
+    """Replay safe in-scope endpoints with one stored authenticated session.
+
+    Authentication material remains private to the session profile and is
+    never copied into observations, logs, or response records.
+    """
+    observations: list[AuthenticatedObservation] = []
+
+    profile = _read_session_profile(
+        session_type,
+        target_url=target_url,
+        tenant=tenant,
+    )
+    session_headers = _headers_from_profile(profile)
+
+    if not session_headers:
+        if log_cb:
+            await _emit(
+                log_cb,
+                f"[authenticated] No {session_type} session profile found; skipping replay",
+            )
+        return observations
+
+    endpoints = sorted(
+        inventory.endpoints.values(),
+        key=lambda endpoint: (endpoint.method, endpoint.url),
+    )
+
+    async with httpx.AsyncClient(
+        timeout=HTTP_TIMEOUT_SECONDS,
+        follow_redirects=False,
+        headers={"User-Agent": "AuthLeak/1.3 (+authorized-security-testing)"},
+    ) as client:
+        for endpoint in endpoints:
+            method = endpoint.method.upper()
+
+            if method not in SAFE_METHODS:
+                continue
+
+            if scope_policy is not None and not scope_policy.allows(endpoint.url):
+                inventory.record_blocked(endpoint.url)
+                if log_cb:
+                    await _emit(
+                        log_cb,
+                        f"[scope] Authenticated replay blocked: {endpoint.url}",
+                    )
+                continue
+
+            if log_cb:
+                await _emit(
+                    log_cb,
+                    f"[authenticated] {session_type} {method} {endpoint.url}",
+                )
+
+            observed_at = datetime.now(timezone.utc).isoformat()
+
+            try:
+                response = await client.request(
+                    method,
+                    endpoint.url,
+                    headers=session_headers,
+                )
+
+                observations.append(
+                    AuthenticatedObservation(
+                        session_type=session_type,
+                        method=method,
+                        url=endpoint.url,
+                        status=response.status_code,
+                        resource_type=endpoint.resource_type,
+                        in_scope=True,
+                        authenticated=True,
+                        observed_at=observed_at,
+                    )
+                )
+            except Exception as error:
+                if log_cb:
+                    await _emit(
+                        log_cb,
+                        f"[authenticated] Request failed for {endpoint.url}: {error}",
+                    )
+
+    return observations
+
 
 async def autonomous_crawl_and_scan(
     target_url: Any,
