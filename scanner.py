@@ -27,7 +27,10 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
-from playwright.async_api import Request, Response, async_playwright
+from playwright.async_api import Request, Response, Route, async_playwright
+
+from asset_inventory import AssetInventory
+from scope_policy import ScopePolicy
 
 LogCallback = Callable[[str], Awaitable[None]]
 ProgressCallback = Callable[[dict[str, Any]], Awaitable[None]]
@@ -427,6 +430,8 @@ async def autonomous_crawl_and_scan(
     attacker_token: str | None = None,
     tenant: str | None = None,
     log_cb: LogCallback | None = None,
+    scope_policy: ScopePolicy | None = None,
+    inventory: AssetInventory | None = None,
 ) -> list[dict[str, Any]]:
     """Run reconnaissance, Engine A, and safe authorization checks for one target."""
     config: dict[str, Any] = target_url if isinstance(target_url, dict) else {}
@@ -443,6 +448,14 @@ async def autonomous_crawl_and_scan(
 
     validate_url(url_str)
     active_tenant = _sanitize_tenant(active_tenant)
+    inventory = inventory or AssetInventory()
+
+    if scope_policy is not None:
+        decision = scope_policy.decide(url_str)
+        if not decision.allowed:
+            inventory.record_blocked(url_str)
+            raise ValueError(f"Scope blocked: {url_str} — {decision.reason}")
+
     scan_findings: list[dict[str, Any]] = []
 
     await _emit(log_cb, f"[start] Scanning {url_str}")
@@ -456,13 +469,59 @@ async def autonomous_crawl_and_scan(
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch(headless=True)
             context = await browser.new_context()
+
+            async def handle_route(route: Route) -> None:
+                request_url = route.request.url
+                parsed = urlparse(request_url)
+                if (
+                    scope_policy is not None
+                    and parsed.scheme.lower() in {"http", "https"}
+                    and not scope_policy.allows(request_url)
+                ):
+                    inventory.record_blocked(request_url)
+                    await _emit(log_cb, f"[scope] Blocked out-of-scope request: {request_url}")
+                    await route.abort(error_code="blockedbyclient")
+                    return
+                await route.continue_()
+
+            await context.route("**/*", handle_route)
             page = await context.new_page()
+
+            def handle_response(response: Response) -> None:
+                response_url = response.url
+                parsed = urlparse(response_url)
+                if parsed.scheme.lower() not in {"http", "https"}:
+                    return
+                request = response.request
+                inventory.record_response(
+                    response_url,
+                    method=request.method,
+                    status_code=response.status,
+                    resource_type=request.resource_type,
+                )
 
             async def handle_request(request: Request) -> None:
                 method = request.method.upper()
+                request_url = request.url
+                parsed = urlparse(request_url)
+                if parsed.scheme.lower() not in {"http", "https"}:
+                    return
+
+                api_like = (
+                    "/api/" in request_url
+                    or "/v1/" in request_url
+                    or "/v2/" in request_url
+                    or re.search(r"/\d+(?=/|$)", urlparse(request_url).path)
+                )
+                inventory.record_request(
+                    request_url,
+                    method=method,
+                    resource_type=request.resource_type,
+                    api_like=bool(api_like),
+                )
+
                 if method not in SAFE_METHODS:
                     return
-                request_url = request.url
                 if (
                     "/api/" in request_url
                     or "/v1/" in request_url
@@ -473,6 +532,7 @@ async def autonomous_crawl_and_scan(
                     await _emit(log_cb, f"[discovered] {method} {request_url}")
 
             page.on("request", handle_request)
+            page.on("response", handle_response)
 
             try:
                 await page.goto(url_str, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT_MS)
@@ -487,27 +547,72 @@ async def autonomous_crawl_and_scan(
 
             # Engine A: client-side JavaScript secret detection.
             soup = BeautifulSoup(content, "html.parser")
-            scripts = [
-                script.get("src")
-                for script in soup.find_all("script")
-                if script.get("src")
-            ]
+
+            script_urls: list[str] = []
+            for script in soup.find_all("script"):
+                script_src = script.get("src")
+                if not script_src:
+                    continue
+                full_script_url = urljoin(url_str, script_src)
+                parsed_script = urlparse(full_script_url)
+                if parsed_script.scheme.lower() not in {"http", "https"}:
+                    continue
+                allowed = scope_policy is None or scope_policy.allows(full_script_url)
+                inventory.record_script(full_script_url, allowed=allowed)
+                if allowed:
+                    script_urls.append(full_script_url)
+
+            for anchor in soup.find_all("a"):
+                href = anchor.get("href")
+                if not href:
+                    continue
+                link_url = urljoin(url_str, href)
+                parsed_link = urlparse(link_url)
+                if parsed_link.scheme.lower() not in {"http", "https"}:
+                    continue
+                allowed = scope_policy is None or scope_policy.allows(link_url)
+                inventory.record_link(link_url, allowed=allowed)
+
+            for form in soup.find_all("form"):
+                action = form.get("action") or url_str
+                form_url = urljoin(url_str, action)
+                parsed_form = urlparse(form_url)
+                if parsed_form.scheme.lower() not in {"http", "https"}:
+                    continue
+                allowed = scope_policy is None or scope_policy.allows(form_url)
+                inventory.record_form(form_url, allowed=allowed)
             if explicit_api:
                 try:
                     validate_url(explicit_api, "API endpoint")
-                    discovered_apis.setdefault(explicit_api, "GET")
+                    if scope_policy is not None and not scope_policy.allows(explicit_api):
+                        inventory.record_blocked(explicit_api)
+                        await _emit(
+                            log_cb,
+                            f"[scope] Ignoring out-of-scope optional API endpoint: {explicit_api}",
+                        )
+                    else:
+                        inventory.record_request(
+                            explicit_api,
+                            method="GET",
+                            resource_type="manual",
+                            api_like=True,
+                        )
+                        discovered_apis.setdefault(explicit_api, "GET")
                 except ValueError:
                     await _emit(log_cb, "[warn] Ignoring invalid optional API endpoint")
 
-            await _emit(log_cb, f"[engine-a] Inspecting {len(scripts)} JavaScript assets")
+            await _emit(log_cb, f"[engine-a] Inspecting {len(script_urls)} JavaScript assets")
 
             async with httpx.AsyncClient(
                 timeout=HTTP_TIMEOUT_SECONDS,
-                follow_redirects=True,
+                follow_redirects=False,
                 headers={"User-Agent": "AuthLeak/1.3 (+authorized-security-testing)"},
             ) as client:
-                for script_src in scripts:
-                    full_script_url = urljoin(url_str, script_src)
+                for full_script_url in script_urls:
+                    if scope_policy is not None and not scope_policy.allows(full_script_url):
+                        inventory.record_blocked(full_script_url)
+                        await _emit(log_cb, f"[scope] Skipping out-of-scope script fetch: {full_script_url}")
+                        continue
                     try:
                         response = await client.get(full_script_url)
                         response.raise_for_status()
@@ -593,6 +698,13 @@ async def autonomous_crawl_and_scan(
                     ) as client:
                         for api_url, method in discovered_apis.items():
                             if method not in SAFE_METHODS:
+                                continue
+                            if scope_policy is not None and not scope_policy.allows(api_url):
+                                inventory.record_blocked(api_url)
+                                await _emit(
+                                    log_cb,
+                                    f"[scope] TokenSwap blocked out-of-scope API: {api_url}",
+                                )
                                 continue
                             await _emit(log_cb, f"[tokenswap] Checking {api_url}")
                             try:
@@ -689,6 +801,8 @@ async def autonomous_crawl_and_scan(
 async def sequential_batch_scan(
     scope_list: list[str],
     response_criteria: str,
+    scope_policy: ScopePolicy | None = None,
+    inventory: AssetInventory | None = None,
 ) -> list[dict[str, Any]]:
     """Consume exactly one scope at a time and fully finish each target before advancing."""
     context = _scan_context.get()
@@ -696,6 +810,7 @@ async def sequential_batch_scan(
     log_cb = context.get("log_cb")
 
     queue = deque(scope_list)
+    inventory = inventory or AssetInventory()
     total = len(queue)
     completed = 0
     failed = 0
@@ -709,6 +824,7 @@ async def sequential_batch_scan(
             "failed": 0,
             "current": None,
             "findings": 0,
+            "inventory": inventory.summary(),
             "status": "scanning",
         }
     )
@@ -718,6 +834,26 @@ async def sequential_batch_scan(
         current_url = queue.popleft()
         current_index = completed + failed + 1
         target_tenant = tenant or tenant_from_url(current_url)
+
+        if scope_policy is not None and not scope_policy.allows(current_url):
+            inventory.record_blocked(current_url)
+            failed += 1
+            await _emit(
+                log_cb,
+                f"[scope] Queue blocked before scan: {current_url}",
+            )
+            await _progress(
+                {
+                    "total": total,
+                    "completed": completed,
+                    "failed": failed,
+                    "current": None,
+                    "findings": len(batch_findings),
+                    "inventory": inventory.summary(),
+                    "status": "scanning" if queue else "finishing",
+                }
+            )
+            continue
 
         await _emit(
             log_cb,
@@ -730,6 +866,7 @@ async def sequential_batch_scan(
                 "failed": failed,
                 "current": current_url,
                 "findings": len(batch_findings),
+                "inventory": inventory.summary(),
                 "status": "scanning",
             }
         )
@@ -740,6 +877,8 @@ async def sequential_batch_scan(
                 response_criteria=response_criteria,
                 tenant=target_tenant,
                 log_cb=log_cb,
+                scope_policy=scope_policy,
+                inventory=inventory,
             )
             batch_findings.extend(findings)
             completed += 1
@@ -755,6 +894,7 @@ async def sequential_batch_scan(
                 "failed": failed,
                 "current": None,
                 "findings": len(batch_findings),
+                "inventory": inventory.summary(),
                 "status": "scanning" if queue else "finishing",
             }
         )
