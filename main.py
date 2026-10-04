@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from program_intelligence import build_recommendations
+from program_intelligence import build_recommendations, fetch_scope_exclusions, fetch_structured_scopes
 
 from scanner import (
     autonomous_crawl_and_scan,
@@ -74,6 +74,12 @@ class HackerOneIntelligenceConfig(BaseModel):
     hackerone_username: str = Field(min_length=1, max_length=200)
     hackerone_api_token: str = Field(min_length=1, max_length=500)
     shortlist_size: int = Field(default=12, ge=5, le=12)
+
+
+class HackerOneScopeDetailConfig(BaseModel):
+    hackerone_username: str = Field(min_length=1, max_length=200)
+    hackerone_api_token: str = Field(min_length=1, max_length=500)
+    program_slug: str = Field(min_length=1, max_length=120)
 
 
 @app.get("/", response_class=FileResponse)
@@ -441,6 +447,92 @@ async def hackerone_intelligence(config: HackerOneIntelligenceConfig) -> dict[st
             log_cb=intelligence_log,
         )
         return result
+    except httpx.HTTPError as error:
+        raise HTTPException(status_code=502, detail=f"HackerOne request failed: {error}") from error
+    except (RuntimeError, ValueError) as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.post("/api/hackerone/scope-detail")
+async def hackerone_scope_detail(config: HackerOneScopeDetailConfig) -> dict[str, Any]:
+    """Return the complete structured scope for a selected HackerOne program."""
+    try:
+        slug = _validate_program_slug(config.program_slug)
+
+        async def scope_log(_message: str) -> None:
+            return None
+
+        scopes = await fetch_structured_scopes(
+            config.hackerone_username,
+            config.hackerone_api_token,
+            slug,
+            scope_log,
+        )
+
+        assets: list[dict[str, Any]] = []
+        asset_type_counts: dict[str, int] = {}
+        submission_assets = 0
+        bounty_assets = 0
+        url_assets = 0
+
+        for item in scopes:
+            if not isinstance(item, dict):
+                continue
+            attrs = item.get("attributes")
+            if not isinstance(attrs, dict):
+                continue
+            asset_type = str(attrs.get("asset_type") or "unknown")
+            identifier = str(attrs.get("asset_identifier") or "")
+            submission = attrs.get("eligible_for_submission") is True
+            bounty = attrs.get("eligible_for_bounty") is True
+            asset_type_counts[asset_type] = asset_type_counts.get(asset_type, 0) + 1
+            submission_assets += int(submission)
+            bounty_assets += int(bounty)
+            url_assets += int(asset_type == "URL")
+            assets.append({
+                "id": str(item.get("id") or ""),
+                "asset_type": asset_type,
+                "asset_identifier": identifier,
+                "eligible_for_submission": submission,
+                "eligible_for_bounty": bounty,
+                "max_severity": attrs.get("max_severity"),
+                "instruction": str(attrs.get("instruction") or ""),
+            })
+
+        exclusions: list[dict[str, Any]] = []
+        exclusions_error = None
+        try:
+            raw_exclusions = await fetch_scope_exclusions(
+                config.hackerone_username,
+                config.hackerone_api_token,
+                slug,
+                scope_log,
+            )
+            for item in raw_exclusions:
+                attrs = item.get("attributes") if isinstance(item, dict) else None
+                attrs = attrs if isinstance(attrs, dict) else {}
+                label = next((str(attrs.get(key)).strip() for key in ("name", "title", "category", "description") if attrs.get(key)), "Scope exclusion")
+                exclusions.append({
+                    "id": str(item.get("id") or ""),
+                    "label": " ".join(label.split())[:240],
+                    "instruction": str(attrs.get("instruction") or attrs.get("description") or ""),
+                })
+        except Exception as error:
+            exclusions_error = str(error)
+
+        return {
+            "program_slug": slug,
+            "summary": {
+                "total_assets": len(assets),
+                "submission_assets": submission_assets,
+                "bounty_assets": bounty_assets,
+                "url_assets": url_assets,
+                "asset_type_counts": asset_type_counts,
+            },
+            "assets": assets,
+            "scope_exclusions": exclusions,
+            "scope_exclusions_error": exclusions_error,
+        }
     except httpx.HTTPError as error:
         raise HTTPException(status_code=502, detail=f"HackerOne request failed: {error}") from error
     except (RuntimeError, ValueError) as error:

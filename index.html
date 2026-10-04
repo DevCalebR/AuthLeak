@@ -3,611 +3,492 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AuthLeak | Authorized Security Scanner</title>
+  <title>AuthLeak | Bug Bounty Command Center</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
           boxShadow: {
-            glow: '0 0 0 1px rgba(34,211,238,.08), 0 18px 50px rgba(0,0,0,.35)'
+            panel: '0 20px 70px rgba(0,0,0,.28)',
+            cyan: '0 0 0 1px rgba(34,211,238,.08), 0 18px 60px rgba(8,47,73,.18)'
           }
         }
       }
     }
   </script>
 </head>
-<body class="min-h-screen bg-slate-950 text-slate-100">
-  <main class="mx-auto max-w-7xl p-5 md:p-8">
-    <header class="mb-8 flex flex-col gap-4 border-b border-slate-800 pb-6 lg:flex-row lg:items-center lg:justify-between">
+<body class="min-h-screen bg-[#070b14] text-slate-100">
+  <div class="pointer-events-none fixed inset-0 overflow-hidden">
+    <div class="absolute -left-32 -top-32 h-96 w-96 rounded-full bg-cyan-500/5 blur-3xl"></div>
+    <div class="absolute right-0 top-1/3 h-80 w-80 rounded-full bg-violet-500/5 blur-3xl"></div>
+  </div>
+
+  <main class="relative mx-auto max-w-[1500px] px-4 py-5 md:px-7 md:py-7">
+    <header class="mb-6 flex flex-col gap-4 border-b border-slate-800/80 pb-6 lg:flex-row lg:items-center lg:justify-between">
       <div>
-        <p class="text-xs font-bold uppercase tracking-[.32em] text-cyan-400">Authorized security testing</p>
-        <h1 class="mt-1 text-4xl font-black tracking-tight md:text-5xl">Auth<span class="text-cyan-400">Leak</span></h1>
-        <p class="mt-2 max-w-2xl text-sm text-slate-400">Local asynchronous reconnaissance, session testing, and one-asset-at-a-time bug bounty workflow.</p>
+        <div class="flex items-center gap-3">
+          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-400/10 ring-1 ring-cyan-400/20">
+            <span class="text-lg font-black text-cyan-300">A</span>
+          </div>
+          <div>
+            <p class="text-[10px] font-black uppercase tracking-[.28em] text-cyan-400">Authorized security testing</p>
+            <h1 class="mt-0.5 text-3xl font-black tracking-tight md:text-4xl">Auth<span class="text-cyan-400">Leak</span></h1>
+          </div>
+        </div>
+        <p class="mt-3 max-w-3xl text-sm leading-6 text-slate-400">Program intelligence, scope review, session preparation, and sequential scanning in one local command center.</p>
       </div>
-      <div id="global-status" role="status" class="rounded-full border border-slate-700 bg-slate-900/60 px-4 py-2 text-sm text-slate-300 shadow-glow">Ready</div>
+      <div class="flex items-center gap-3">
+        <div id="connection-chip" class="rounded-full border border-slate-700 bg-slate-900/80 px-3 py-2 text-xs font-bold text-slate-400">Local dashboard</div>
+        <div id="global-status" role="status" class="rounded-full border border-slate-700 bg-slate-900/80 px-4 py-2 text-sm font-semibold text-slate-300 shadow-cyan">Ready</div>
+      </div>
     </header>
 
-    <div class="grid gap-6 xl:grid-cols-[1.2fr_.8fr]">
-      <!-- AuthLeak program intelligence -->
-      <section class="mb-8 rounded-3xl border border-cyan-400/20 bg-slate-900/70 p-6 shadow-2xl shadow-cyan-950/10">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div class="flex items-center gap-3">
-              <span class="rounded-full bg-cyan-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-cyan-300 ring-1 ring-cyan-400/20">Program intelligence</span>
-              <span class="text-xs text-slate-500">Read-only HackerOne metadata + structured scope analysis</span>
-            </div>
-            <h2 class="mt-3 text-2xl font-black">AuthLeak-Compatible Programs</h2>
-            <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-400">AuthLeak evaluates your accessible programs first, then examines real structured scopes on a small shortlist. A program with unknown automation permission is never treated as authorized for automated scanning.</p>
-          </div>
-          <div class="text-right text-xs text-slate-500">
-            <div id="intel-summary">No analysis run yet.</div>
-            <div id="intel-policy-note" class="mt-1 text-slate-600">Policy gate is separate from technical fit.</div>
-          </div>
-        </div>
+    <section class="mb-6 grid gap-3 md:grid-cols-4">
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-panel">
+        <div class="flex items-center justify-between"><span class="text-[10px] font-black uppercase tracking-widest text-slate-500">Programs</span><span class="text-cyan-300">01</span></div>
+        <p id="stat-programs" class="mt-2 text-2xl font-black">—</p><p class="mt-1 text-xs text-slate-500">accessible HackerOne programs</p>
+      </div>
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-panel">
+        <div class="flex items-center justify-between"><span class="text-[10px] font-black uppercase tracking-widest text-slate-500">Enriched</span><span class="text-cyan-300">02</span></div>
+        <p id="stat-enriched" class="mt-2 text-2xl font-black">—</p><p class="mt-1 text-xs text-slate-500">real structured scopes analyzed</p>
+      </div>
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-panel">
+        <div class="flex items-center justify-between"><span class="text-[10px] font-black uppercase tracking-widest text-slate-500">Selected</span><span class="text-cyan-300">03</span></div>
+        <p id="stat-selected" class="mt-2 text-2xl font-black">None</p><p id="stat-selected-detail" class="mt-1 text-xs text-slate-500">review a program to continue</p>
+      </div>
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-panel">
+        <div class="flex items-center justify-between"><span class="text-[10px] font-black uppercase tracking-widest text-slate-500">Scan</span><span class="text-cyan-300">04</span></div>
+        <p id="stat-scan" class="mt-2 text-2xl font-black">Idle</p><p id="stat-scan-detail" class="mt-1 text-xs text-slate-500">no active HackerOne batch</p>
+      </div>
+    </section>
 
-        <form id="intel-form" class="mt-6 grid gap-4 lg:grid-cols-[1fr_1fr_180px_auto]">
-          <label class="text-xs font-bold uppercase tracking-widest text-slate-500">HackerOne Username
-            <input id="intel-username" required autocomplete="username" type="text" placeholder="your-hackerone-username" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/10">
-          </label>
-          <label class="text-xs font-bold uppercase tracking-widest text-slate-500">HackerOne API Token
-            <input id="intel-token" required autocomplete="off" type="password" placeholder="••••••••••••••••" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/10">
-          </label>
-          <label class="text-xs font-bold uppercase tracking-widest text-slate-500">Scope shortlist
-            <select id="intel-count" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-cyan-400">
-              <option value="8">8 programs</option>
-              <option value="12" selected>12 programs</option>
-            </select>
-          </label>
-          <button id="intel-button" type="submit" class="rounded-xl bg-cyan-400 px-5 py-3 font-black text-slate-950 shadow-lg shadow-cyan-950/30 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-50">Analyze Programs</button>
-        </form>
-
-        <div id="intel-results" class="mt-6 grid gap-4 lg:grid-cols-2"></div>
-        <div id="intel-empty" class="mt-6 rounded-2xl border border-dashed border-slate-800 bg-slate-950/50 p-6 text-center text-sm text-slate-500">Run program analysis to build the shortlist.</div>
-      </section>
-
-      <!-- HackerOne sync -->
-      <section class="rounded-2xl border border-cyan-900/70 bg-slate-900/70 p-6 shadow-glow">
-        <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <div class="flex items-center gap-2">
-              <h2 class="text-2xl font-bold">HackerOne Platform Sync</h2>
-              <span class="rounded-full bg-cyan-400/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-cyan-300 ring-1 ring-cyan-500/30">Sequential</span>
-            </div>
-            <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Authenticate with HackerOne, import only eligible URL scopes, then scan each imported asset completely before advancing.</p>
-          </div>
-        </div>
-
-        <form id="hackerone-form" class="space-y-4">
-          <label class="block text-sm font-medium text-slate-200">
-            HackerOne Username
-            <input id="h1-username" required autocomplete="username" type="text" placeholder="your-hackerone-username" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/10">
-          </label>
-          <label class="block text-sm font-medium text-slate-200">
-            HackerOne API Key
-            <input id="h1-token" required autocomplete="off" type="password" placeholder="••••••••••••••••" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/10">
-          </label>
-          <label class="block text-sm font-medium text-slate-200">
-            Target Program Slug
-            <input id="h1-slug" required autocomplete="off" type="text" placeholder="nextcloud" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/10">
-          </label>
-
-          <button id="h1-sync-button" type="submit" class="w-full rounded-xl bg-cyan-400 px-4 py-3.5 font-black text-slate-950 shadow-lg shadow-cyan-950/30 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-50">
-            Sync &amp; Launch Sequential Scan
-          </button>
-        </form>
-
-        <div class="mt-6 grid gap-3 sm:grid-cols-4">
-          <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
-            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Imported</p>
-            <p id="h1-imported" class="mt-1 text-2xl font-black">0</p>
-          </div>
-          <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
-            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Completed</p>
-            <p id="h1-completed" class="mt-1 text-2xl font-black">0</p>
-          </div>
-          <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
-            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Failed</p>
-            <p id="h1-failed" class="mt-1 text-2xl font-black">0</p>
-          </div>
-          <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
-            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Findings</p>
-            <p id="h1-findings" class="mt-1 text-2xl font-black">0</p>
-          </div>
-        </div>
-
-        <div class="mt-5">
-          <div class="mb-2 flex items-center justify-between text-xs">
-            <span id="h1-progress-label" class="text-slate-400">Idle</span>
-            <span id="h1-progress-count" class="font-mono text-slate-500">0 / 0</span>
-          </div>
-          <div class="h-2 overflow-hidden rounded-full bg-slate-800">
-            <div id="h1-progress-bar" class="h-full w-0 rounded-full bg-cyan-400 transition-all duration-300"></div>
-          </div>
-        </div>
-
-        <div class="mt-4 rounded-xl border border-slate-800 bg-black/30 p-4">
-          <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Current Asset</p>
-          <p id="h1-current-asset" class="mt-2 break-all font-mono text-xs text-cyan-300">None</p>
-        </div>
-
-        <p class="mt-4 text-xs leading-5 text-slate-500">For automated TokenSwap checks, AuthLeak reads <code class="text-slate-300">AUTHLEAK_RESPONSE_CRITERIA</code> from the local process environment. The HackerOne API key is not persisted by the browser UI or server job state.</p>
-      </section>
-
-      <!-- Manual scan -->
-      <section class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 shadow-glow">
-        <div class="mb-6">
-          <div class="flex items-center justify-between gap-3">
-            <h2 class="text-xl font-bold">Manual Scan</h2>
-            <span class="rounded-full bg-slate-800 px-2.5 py-1 text-[10px] uppercase tracking-widest text-slate-400">Single Target</span>
-          </div>
-          <p class="mt-2 text-sm leading-6 text-slate-400">Run the existing scanning core against one authorized target without importing platform scope.</p>
-        </div>
-
-        <form id="scan-form" class="space-y-4">
-          <label class="block text-sm font-medium">
-            Target URL
-            <input id="target-url" required name="target_url" type="url" placeholder="https://app.example.test" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none transition focus:border-cyan-400">
-          </label>
-          <label class="block text-sm font-medium">
-            API Endpoint <span class="text-slate-500">(optional)</span>
-            <input name="api_endpoint" type="url" placeholder="https://app.example.test/api/v1/object/42" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none transition focus:border-cyan-400">
-          </label>
-          <label class="block text-sm font-medium">
-            Victim-Shaped JSON Payload
-            <textarea name="payload" rows="2" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 font-mono text-xs outline-none transition focus:border-cyan-400">{}</textarea>
-          </label>
-          <div class="grid gap-4 md:grid-cols-2">
-            <label class="block text-sm font-medium">
-              Victim Token <span class="text-slate-500">(optional)</span>
-              <input name="victim_token" type="password" autocomplete="off" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none transition focus:border-cyan-400">
-            </label>
-            <label class="block text-sm font-medium">
-              Attacker Token <span class="text-slate-500">(optional)</span>
-              <input name="attacker_token" type="password" autocomplete="off" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none transition focus:border-cyan-400">
-            </label>
-          </div>
-          <label class="block text-sm font-medium">
-            Victim Response Criteria
-            <input id="response-criteria" name="victim_criteria" placeholder="CONFIDENTIAL or a victim-specific marker" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none transition focus:border-cyan-400">
-          </label>
-          <button id="scan-button" type="submit" class="w-full rounded-xl bg-slate-100 px-4 py-3.5 font-black text-slate-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50">Start Authorized Scan</button>
-        </form>
-      </section>
-    </div>
-
-    <!-- Session vault -->
-    <section class="mt-6 rounded-2xl border border-violet-900/70 bg-slate-900/70 p-6 shadow-glow">
-      <div class="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <section class="mb-6 rounded-3xl border border-cyan-400/15 bg-slate-900/70 p-5 shadow-panel md:p-6">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h2 class="text-xl font-bold">Multi-Tenant Session Harvester</h2>
-          <p class="mt-1 text-sm text-slate-400">Headed browser capture. New profiles are written under <code class="text-slate-300">sessions/&lt;tenant&gt;/</code>.</p>
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="rounded-full bg-cyan-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.2em] text-cyan-300 ring-1 ring-cyan-400/20">01 · Discover</span>
+            <span class="text-xs text-slate-500">Credentials stay in page memory only</span>
+          </div>
+          <h2 class="mt-3 text-2xl font-black">Find an AuthLeak-compatible program</h2>
+          <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-400">AuthLeak analyzes your accessible programs, then retrieves real structured scopes for a bounded shortlist. Technical fit never overrides a program's authorization rules.</p>
         </div>
-        <span class="rounded-full bg-violet-400/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-violet-300 ring-1 ring-violet-500/30">Vault Enabled</span>
-      </div>
-
-      <div class="grid gap-4 lg:grid-cols-[1fr_240px]"><label class="block text-sm font-medium">Login URL
-        <input id="login-url" type="url" placeholder="https://app.example.test/login" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none transition focus:border-violet-400">
-      </label>
-      <label class="block text-sm font-medium">Tenant / Program Slug <span class="text-slate-500">(optional)</span>
-        <input id="session-tenant" type="text" placeholder="nextcloud" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none transition focus:border-violet-400">
-      </label></div>
-
-      <p class="mt-3 text-xs leading-5 text-slate-500">Use the program slug here when you want credentials written to a platform-specific tenant such as <code class="text-slate-300">sessions/nextcloud/</code>. Otherwise AuthLeak derives the tenant from the login hostname.</p>
-
-      <div class="mt-5 grid gap-3 md:grid-cols-2">
-        <div class="flex items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-950 p-4">
-          <div><p class="font-semibold">Victim session</p><p class="mt-1 text-xs text-slate-500">Authorization baseline</p></div>
-          <div class="flex items-center gap-2"><span id="victim-badge" class="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">Empty</span><button data-session="victim" class="harvest-button rounded-lg bg-violet-400 px-3 py-2 text-xs font-bold text-slate-950 transition hover:bg-violet-300">Harvest</button></div>
-        </div>
-        <div class="flex items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-950 p-4">
-          <div><p class="font-semibold">Attacker session</p><p class="mt-1 text-xs text-slate-500">Authorization candidate</p></div>
-          <div class="flex items-center gap-2"><span id="attacker-badge" class="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">Empty</span><button data-session="attacker" class="harvest-button rounded-lg bg-violet-400 px-3 py-2 text-xs font-bold text-slate-950 transition hover:bg-violet-300">Harvest</button></div>
+        <div class="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-widest">
+          <span class="rounded-full bg-emerald-500/10 px-2.5 py-1 text-emerald-300 ring-1 ring-emerald-500/20">Strong fit</span>
+          <span class="rounded-full bg-slate-800 px-2.5 py-1 text-slate-300 ring-1 ring-slate-700">Good fit</span>
+          <span class="rounded-full bg-amber-500/10 px-2.5 py-1 text-amber-300 ring-1 ring-amber-500/20">Review</span>
         </div>
       </div>
+
+      <form id="intel-form" class="mt-6 grid gap-4 lg:grid-cols-[1fr_1fr_160px_auto]">
+        <label class="text-xs font-bold uppercase tracking-widest text-slate-500">HackerOne Username
+          <input id="intel-username" required autocomplete="username" type="text" placeholder="your-hackerone-username" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/10">
+        </label>
+        <label class="text-xs font-bold uppercase tracking-widest text-slate-500">HackerOne API Token
+          <input id="intel-token" required autocomplete="off" type="password" placeholder="••••••••••••••••" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/10">
+        </label>
+        <label class="text-xs font-bold uppercase tracking-widest text-slate-500">Scope enrichment
+          <select id="intel-count" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm outline-none focus:border-cyan-400">
+            <option value="8">8 programs</option>
+            <option value="12" selected>12 programs</option>
+          </select>
+        </label>
+        <button id="intel-button" type="submit" class="rounded-xl bg-cyan-400 px-5 py-3 font-black text-slate-950 shadow-lg shadow-cyan-950/30 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-50">Analyze Programs</button>
+      </form>
     </section>
 
-    <!-- Live terminal -->
-    <section class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-6 shadow-glow">
-      <div class="mb-4 flex items-center justify-between gap-3">
-        <div><h2 class="text-xl font-bold">Live Terminal</h2><p id="terminal-context" class="mt-1 text-xs text-slate-500">Waiting for a scan job.</p></div>
-        <button id="clear-terminal" class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 hover:border-slate-500">Clear</button>
+    <section id="program-workspace" class="grid gap-6 xl:grid-cols-[1.35fr_.65fr]">
+      <div class="rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-panel md:p-6">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div class="flex items-center gap-2"><span class="rounded-full bg-cyan-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.2em] text-cyan-300">Program shortlist</span><span id="intel-summary" class="text-xs text-slate-500">No analysis run yet.</span></div>
+            <h2 class="mt-3 text-xl font-black">AuthLeak-Compatible Programs</h2>
+          </div>
+          <div class="flex gap-2">
+            <input id="program-search" type="search" placeholder="Filter by name or handle" class="w-56 rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2 text-xs outline-none focus:border-cyan-400">
+          </div>
+        </div>
+        <div id="program-results" class="mt-5 grid gap-4"></div>
+        <div id="program-empty" class="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 p-8 text-center text-sm text-slate-500">Run program analysis to populate the shortlist.</div>
       </div>
-      <pre id="terminal" class="h-72 overflow-y-auto rounded-xl border border-slate-900 bg-black p-4 font-mono text-xs leading-6 text-emerald-400">$ AuthLeak dashboard connected</pre>
+
+      <aside class="space-y-6">
+        <section class="rounded-3xl border border-violet-400/15 bg-slate-900/70 p-5 shadow-panel">
+          <div class="flex items-center justify-between gap-3"><div><span class="rounded-full bg-violet-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.2em] text-violet-300">02 · Scope review</span><h2 class="mt-3 text-xl font-black">Selected program</h2></div><span id="selected-tier" class="rounded-full bg-slate-800 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">None</span></div>
+          <div id="selected-empty" class="mt-5 rounded-2xl border border-slate-800 bg-slate-950/50 p-5 text-sm leading-6 text-slate-500">Choose <strong class="text-slate-300">Review Scope</strong> on a program to load the complete structured scope, including every asset, eligibility flag, instruction, and available exclusions.</div>
+          <div id="selected-panel" class="hidden mt-5 space-y-4"></div>
+        </section>
+
+        <section class="rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-panel">
+          <div class="flex items-center justify-between"><div><span class="rounded-full bg-emerald-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.2em] text-emerald-300">03 · Authorization gate</span><h2 class="mt-3 text-xl font-black">Before scanning</h2></div></div>
+          <div class="mt-4 rounded-2xl border border-amber-400/15 bg-amber-400/5 p-4 text-xs leading-6 text-slate-400">A technical fit score is not permission to test. Review the selected program's policy and scope on HackerOne, then explicitly confirm that the intended activity is authorized.</div>
+          <label class="mt-4 flex gap-3 text-sm text-slate-300"><input id="scope-confirm" type="checkbox" class="mt-1 h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-400 focus:ring-cyan-400"><span>I reviewed the selected program's scope and applicable policy and confirm that the planned testing is authorized.</span></label>
+          <button id="sync-button" type="button" disabled class="mt-4 w-full rounded-xl bg-cyan-400 px-4 py-3.5 font-black text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-40">Sync Selected Scope &amp; Scan</button>
+          <p id="sync-note" class="mt-3 text-[11px] leading-5 text-slate-600">Select a program, review its scope, and confirm authorization to enable the scan control.</p>
+        </section>
+      </aside>
     </section>
 
-    <!-- Findings -->
+    <section class="mt-6 grid gap-6 lg:grid-cols-[1fr_1fr]">
+      <section class="rounded-3xl border border-violet-900/70 bg-slate-900/70 p-5 shadow-panel md:p-6">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><span class="rounded-full bg-violet-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.2em] text-violet-300">Sessions</span><h2 class="mt-3 text-xl font-black">Multi-tenant session vault</h2><p class="mt-1 text-sm text-slate-400">Harvest victim and attacker profiles for the selected target or tenant.</p></div><span class="rounded-full bg-violet-400/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-violet-300">Vault enabled</span></div>
+        <div class="mt-5 grid gap-4 md:grid-cols-[1fr_220px]"><label class="text-sm font-medium">Login URL<input id="login-url" type="url" placeholder="https://app.example.test/login" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 outline-none focus:border-violet-400"></label><label class="text-sm font-medium">Tenant / Program Slug<input id="session-tenant" type="text" placeholder="selected program slug" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 outline-none focus:border-violet-400"></label></div>
+        <div class="mt-4 grid gap-3 md:grid-cols-2">
+          <div class="flex items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4"><div><p class="font-semibold">Victim session</p><p class="mt-1 text-xs text-slate-500">authorization baseline</p></div><div class="flex items-center gap-2"><span id="victim-badge" class="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">Empty</span><button data-session="victim" class="harvest-button rounded-lg bg-violet-400 px-3 py-2 text-xs font-bold text-slate-950 hover:bg-violet-300">Harvest</button></div></div>
+          <div class="flex items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4"><div><p class="font-semibold">Attacker session</p><p class="mt-1 text-xs text-slate-500">authorization candidate</p></div><div class="flex items-center gap-2"><span id="attacker-badge" class="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">Empty</span><button data-session="attacker" class="harvest-button rounded-lg bg-violet-400 px-3 py-2 text-xs font-bold text-slate-950 hover:bg-violet-300">Harvest</button></div></div>
+        </div>
+      </section>
+
+      <section class="rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-panel md:p-6">
+        <div class="flex items-center justify-between gap-3"><div><span class="rounded-full bg-slate-800 px-3 py-1 text-[10px] font-black uppercase tracking-[.2em] text-slate-400">Manual mode</span><h2 class="mt-3 text-xl font-black">Single-target scan</h2><p class="mt-1 text-sm text-slate-400">Use the existing scanner without HackerOne scope import.</p></div><span class="rounded-full bg-slate-800 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">Direct</span></div>
+        <form id="scan-form" class="mt-5 space-y-4">
+          <label class="block text-sm font-medium">Target URL<input id="target-url" required name="target_url" type="url" placeholder="https://app.example.test" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 outline-none focus:border-cyan-400"></label>
+          <label class="block text-sm font-medium">API Endpoint <span class="text-slate-500">(optional)</span><input name="api_endpoint" type="url" placeholder="https://app.example.test/api/v1/object/42" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 outline-none focus:border-cyan-400"></label>
+          <div class="grid gap-4 md:grid-cols-2"><label class="block text-sm font-medium">Victim Token<input name="victim_token" type="password" autocomplete="off" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 outline-none focus:border-cyan-400"></label><label class="block text-sm font-medium">Attacker Token<input name="attacker_token" type="password" autocomplete="off" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 outline-none focus:border-cyan-400"></label></div>
+          <textarea name="payload" rows="2" class="hidden">{}</textarea>
+          <label class="block text-sm font-medium">Victim Response Criteria<input name="victim_criteria" placeholder="CONFIDENTIAL or a victim-specific marker" class="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 outline-none focus:border-cyan-400"></label>
+          <button id="scan-button" type="submit" class="w-full rounded-xl bg-slate-100 px-4 py-3.5 font-black text-slate-950 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50">Start Authorized Scan</button>
+        </form>
+      </section>
+    </section>
+
+    <section class="mt-6 rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-panel md:p-6">
+      <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><div class="flex items-center gap-2"><span class="rounded-full bg-emerald-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.2em] text-emerald-300">04 · Observe</span><h2 class="text-xl font-black">Live terminal</h2></div><p id="terminal-context" class="mt-1 text-xs text-slate-500">Waiting for a job.</p></div><button id="clear-terminal" class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 hover:border-slate-500">Clear</button></div>
+      <pre id="terminal" class="h-64 overflow-y-auto rounded-2xl border border-slate-900 bg-black p-4 font-mono text-xs leading-6 text-emerald-400">$ AuthLeak dashboard connected</pre>
+    </section>
+
     <section class="mt-8">
-      <div class="mb-4 flex items-center justify-between gap-3"><h2 class="text-2xl font-bold">Findings</h2><span id="finding-count" class="text-sm text-slate-400">0 results</span></div>
-      <div id="results" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3"><p class="text-slate-500">Run a scan to populate results.</p></div>
+      <div class="mb-4 flex items-center justify-between gap-3"><div><span class="rounded-full bg-rose-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.2em] text-rose-300">Findings</span><h2 class="mt-2 text-2xl font-black">Evidence queue</h2></div><span id="finding-count" class="text-sm text-slate-400">0 results</span></div>
+      <div id="results" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3"><p class="text-slate-500">Run a scan to populate findings.</p></div>
     </section>
   </main>
 
-  <dialog id="detail" class="w-[min(900px,94vw)] rounded-2xl border border-slate-700 bg-slate-900 p-6 text-slate-100 backdrop:bg-black/70">
+  <dialog id="detail" class="w-[min(960px,94vw)] rounded-3xl border border-slate-700 bg-slate-900 p-6 text-slate-100 backdrop:bg-black/70">
     <button id="detail-close" class="float-right rounded-lg bg-slate-800 px-3 py-1.5 text-xs hover:bg-slate-700">Close</button>
     <h2 id="detail-title" class="pr-16 text-2xl font-bold"></h2>
     <p id="detail-description" class="mt-3 text-slate-300"></p>
-    <pre id="detail-content" class="mt-4 max-h-[60vh] overflow-y-auto whitespace-pre-wrap rounded-xl border border-slate-800 bg-black p-4 text-xs leading-6"></pre>
+    <pre id="detail-content" class="mt-4 max-h-[60vh] overflow-y-auto whitespace-pre-wrap rounded-2xl border border-slate-800 bg-black p-4 text-xs leading-6"></pre>
   </dialog>
 
   <script>
     const $ = (selector) => document.querySelector(selector);
     const terminal = $('#terminal');
     const globalStatus = $('#global-status');
-    const findingCount = $('#finding-count');
     const results = $('#results');
     const detail = $('#detail');
-    const detailClose = $('#detail-close');
-    const scanButton = $('#scan-button');
-    const h1Button = $('#h1-sync-button');
     let activeJobId = null;
-    let activeJobKind = null;
     let socket;
+    let recommendations = [];
+    let selectedProgram = null;
+    let h1Credentials = { username: '', token: '' };
 
-    const setGlobalStatus = (text, tone = 'idle') => {
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+    const humanize = (value) => String(value || 'unknown').replaceAll('_', ' ');
+
+    function setGlobalStatus(text, tone = 'idle') {
       globalStatus.textContent = text;
-      const tones = {
-        idle: 'border-slate-700 text-slate-300 bg-slate-900/60',
-        running: 'border-cyan-500/40 text-cyan-300 bg-cyan-500/10',
-        success: 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10',
-        error: 'border-rose-500/40 text-rose-300 bg-rose-500/10'
-      };
-      globalStatus.className = `rounded-full border px-4 py-2 text-sm shadow-glow ${tones[tone] || tones.idle}`;
-    };
-
-    const appendLog = (message) => {
-      terminal.textContent += `\n${message}`;
-      terminal.scrollTop = terminal.scrollHeight;
-    };
-
-    const setActiveTerminalJob = (jobId, kind) => {
-      activeJobId = jobId;
-      activeJobKind = kind;
-      $('#terminal-context').textContent = `${kind === 'hackerone' ? 'HackerOne batch' : 'Manual scan'} · ${jobId}`;
-    };
-
-    const connectSocket = () => {
+      const tones = {idle:'border-slate-700 text-slate-300 bg-slate-900/80',running:'border-cyan-500/40 text-cyan-300 bg-cyan-500/10',success:'border-emerald-500/40 text-emerald-300 bg-emerald-500/10',error:'border-rose-500/40 text-rose-300 bg-rose-500/10'};
+      globalStatus.className = `rounded-full border px-4 py-2 text-sm font-semibold shadow-cyan ${tones[tone] || tones.idle}`;
+    }
+    function appendLog(message) { terminal.textContent += `\n${message}`; terminal.scrollTop = terminal.scrollHeight; }
+    function setActiveTerminalJob(jobId, kind) { activeJobId = jobId; $('#terminal-context').textContent = `${kind} · ${jobId}`; }
+    function connectSocket() {
       socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/logs`);
-      socket.onopen = () => appendLog('$ websocket connected');
-      socket.onmessage = (event) => {
-        const item = JSON.parse(event.data);
-        if (!activeJobId || item.job_id === activeJobId) appendLog(item.message);
-      };
-      socket.onclose = () => setTimeout(connectSocket, 1000);
-    };
+      socket.onopen = () => { $('#connection-chip').textContent = 'WebSocket connected'; $('#connection-chip').className = 'rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-300'; appendLog('$ websocket connected'); };
+      socket.onmessage = (event) => { const item = JSON.parse(event.data); if (!activeJobId || item.job_id === activeJobId) appendLog(item.message); };
+      socket.onclose = () => { $('#connection-chip').textContent = 'Reconnecting…'; $('#connection-chip').className = 'rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-300'; setTimeout(connectSocket, 1000); };
+    }
     connectSocket();
 
-    const setBadge = (type, stored) => {
+    function setBadge(type, stored) {
       const badge = $(`#${type}-badge`);
       badge.textContent = stored ? 'Stored' : 'Empty';
-      badge.className = stored
-        ? 'rounded-full bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300 ring-1 ring-emerald-500/40'
-        : 'rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300';
-    };
-
-    const sessionStatusQuery = () => {
-      const login = $('#login-url').value.trim();
-      const tenant = $('#session-tenant').value.trim();
+      badge.className = stored ? 'rounded-full bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300 ring-1 ring-emerald-500/40' : 'rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300';
+    }
+    function sessionStatusQuery() {
+      const login = $('#login-url').value.trim(); const tenant = $('#session-tenant').value.trim();
       if (tenant) return `/api/sessions/status?program_slug=${encodeURIComponent(tenant)}`;
       if (login) return `/api/sessions/status?target_url=${encodeURIComponent(login)}`;
-      const target = $('#target-url').value.trim();
-      if (target) return `/api/sessions/status?target_url=${encodeURIComponent(target)}`;
+      const target = $('#target-url').value.trim(); if (target) return `/api/sessions/status?target_url=${encodeURIComponent(target)}`;
       return null;
-    };
+    }
+    async function refreshSessionStatus() {
+      const endpoint = sessionStatusQuery(); if (!endpoint) return;
+      try { const r = await fetch(endpoint); if (!r.ok) return; const d = await r.json(); setBadge('victim', d.victim_stored); setBadge('attacker', d.attacker_stored); } catch {}
+    }
+    ['#login-url','#session-tenant','#target-url'].forEach(id => $(id).addEventListener('change', refreshSessionStatus));
 
-    const refreshSessionStatus = async () => {
-      const endpoint = sessionStatusQuery();
-      if (!endpoint) return;
+    document.querySelectorAll('.harvest-button').forEach(button => button.addEventListener('click', async () => {
+      const target_url = $('#login-url').value.trim() || $('#target-url').value.trim(); const tenant = $('#session-tenant').value.trim();
+      if (!target_url) { setGlobalStatus('Enter a Login URL first.', 'error'); return; }
+      button.disabled = true; setGlobalStatus(`Opening ${button.dataset.session} browser…`, 'running');
       try {
-        const response = await fetch(endpoint);
-        if (!response.ok) return;
-        const data = await response.json();
-        setBadge('victim', data.victim_stored);
-        setBadge('attacker', data.attacker_stored);
-      } catch {}
-    };
+        const response = await fetch('/api/harvest', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target_url,session_type:button.dataset.session,tenant})});
+        const data = await response.json(); if (!response.ok) throw new Error(data.detail || 'Unable to start harvester');
+        setActiveTerminalJob(data.job_id, 'harvest');
+        const poll = async () => { const r = await fetch(`/api/harvest/${data.job_id}`); const job = await r.json(); if (job.status === 'waiting_for_login' || job.status === 'harvesting') return setTimeout(poll,700); button.disabled = false; if (job.status === 'stored') { setGlobalStatus(`${button.dataset.session} session stored.`, 'success'); refreshSessionStatus(); } else setGlobalStatus(job.error || 'Harvest failed.', 'error'); };
+        poll();
+      } catch (error) { button.disabled = false; setGlobalStatus(error.message, 'error'); }
+    }));
 
-    $('#login-url').addEventListener('change', refreshSessionStatus);
-    $('#session-tenant').addEventListener('change', refreshSessionStatus);
-    $('#target-url').addEventListener('change', refreshSessionStatus);
-
-    document.querySelectorAll('.harvest-button').forEach(button => {
-      button.addEventListener('click', async () => {
-        const target_url = $('#login-url').value.trim() || $('#target-url').value.trim();
-        const tenant = $('#session-tenant').value.trim();
-        if (!target_url) {
-          setGlobalStatus('Enter a Login URL first.', 'error');
-          return;
-        }
-        button.disabled = true;
-        setGlobalStatus(`Opening ${button.dataset.session} browser…`, 'running');
-        try {
-          const response = await fetch('/api/harvest', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({target_url, session_type: button.dataset.session, tenant})
-          });
-          const data = await response.json();
-          if (!response.ok) throw new Error(data.detail || 'Unable to start harvester');
-          setActiveTerminalJob(data.job_id, 'harvest');
-          const poll = async () => {
-            const check = await fetch(`/api/harvest/${data.job_id}`);
-            const job = await check.json();
-            if (job.status === 'waiting_for_login' || job.status === 'harvesting') return setTimeout(poll, 700);
-            button.disabled = false;
-            if (job.status === 'stored') {
-              setGlobalStatus(`${button.dataset.session} session stored.`, 'success');
-              refreshSessionStatus();
-            } else {
-              setGlobalStatus(job.error || 'Harvest failed.', 'error');
-            }
-          };
-          poll();
-        } catch (error) {
-          button.disabled = false;
-          setGlobalStatus(error.message, 'error');
-        }
-      });
-    });
-
-    const renderProgress = (job) => {
-      const imported = Number(job.imported_assets || 0);
-      const total = Number(job.total || 0);
-      const completed = Number(job.completed || 0);
-      const failed = Number(job.failed || 0);
-      const findings = Number(job.findings_count || 0);
-      const percentage = total ? Math.round(((completed + failed) / total) * 100) : 0;
-      $('#h1-imported').textContent = imported;
-      $('#h1-completed').textContent = completed;
-      $('#h1-failed').textContent = failed;
-      $('#h1-findings').textContent = findings;
-      $('#h1-progress-count').textContent = `${completed + failed} / ${total}`;
-      $('#h1-progress-bar').style.width = `${Math.min(100, percentage)}%`;
-      $('#h1-progress-label').textContent = job.status === 'complete' ? 'Complete' : (job.status === 'error' ? 'Error' : 'Scanning');
-      $('#h1-current-asset').textContent = job.current || 'None';
-    };
-
-    function renderFindings(findings) {
-      findingCount.textContent = `${findings.length} result${findings.length === 1 ? '' : 's'}`;
-      results.replaceChildren();
-      if (!findings.length) {
-        results.innerHTML = '<p class="text-slate-500">No findings were confirmed by the automated checks.</p>';
-        return;
-      }
-
-      findings.forEach(finding => {
-        const card = document.createElement('button');
-        const severityClass = finding.severity === 'Critical'
-          ? 'bg-rose-500/10 text-rose-300 ring-rose-500/30'
-          : finding.severity === 'High'
-            ? 'bg-amber-500/10 text-amber-300 ring-amber-500/30'
-            : 'bg-slate-800 text-slate-300 ring-slate-700';
-        card.className = 'rounded-2xl border border-slate-800 bg-slate-900 p-5 text-left transition hover:border-cyan-400/50 hover:-translate-y-0.5';
-        card.innerHTML = `
-          <div class="flex items-start justify-between gap-3">
-            <span class="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ring-1 ${severityClass}">${escapeHtml(finding.severity || 'Unknown')}</span>
-            <span class="text-[10px] uppercase tracking-widest text-slate-500">${escapeHtml(finding.type || '')}</span>
-          </div>
-          <h3 class="mt-4 text-lg font-bold"></h3>
-          <p class="mt-2 text-sm leading-6 text-slate-400"></p>
-          <p class="mt-4 break-all font-mono text-[11px] text-cyan-300"></p>
-          <p class="mt-3 text-xs font-semibold text-slate-500">View triage details →</p>`;
-        card.querySelector('h3').textContent = finding.title || 'Untitled finding';
-        card.querySelector('p:nth-of-type(1)').textContent = finding.description || '';
-        card.querySelector('p:nth-of-type(2)').textContent = finding.source || '';
-        card.addEventListener('click', () => openFinding(finding));
-        results.append(card);
-      });
+    function renderStats(data) {
+      $('#stat-programs').textContent = data.programs_analyzed ?? '—';
+      $('#stat-enriched').textContent = data.scope_enriched ?? '—';
+      $('#stat-selected').textContent = selectedProgram ? (selectedProgram.name || selectedProgram.handle) : 'None';
+      $('#stat-selected-detail').textContent = selectedProgram ? `${selectedProgram.scope_profile?.usable_url_count ?? 0} usable URL assets` : 'review a program to continue';
     }
 
-    function escapeHtml(value) {
-      return String(value || '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;'}[char]));
+    function tierClasses(tier) {
+      if (tier === 'strong_fit') return {badge:'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20',score:'text-emerald-300'};
+      if (tier === 'good_fit') return {badge:'bg-cyan-500/10 text-cyan-300 ring-cyan-500/20',score:'text-cyan-300'};
+      if (tier === 'low_fit') return {badge:'bg-slate-800 text-slate-400 ring-slate-700',score:'text-slate-300'};
+      return {badge:'bg-amber-500/10 text-amber-300 ring-amber-500/20',score:'text-amber-300'};
     }
-
-    function openFinding(finding) {
-      $('#detail-title').textContent = `${finding.title || 'Finding'} — ${finding.severity || 'Unknown'}`;
-      $('#detail-description').textContent = finding.description || '';
-      $('#detail-content').textContent = [
-        `Evidence:\n${finding.evidence || 'N/A'}`,
-        `Source:\n${finding.source || 'N/A'}`,
-        `\nCURL:\n${finding.curl || finding.poc_curl || 'N/A'}`,
-        `\nPYTHON:\n${finding.python || 'N/A'}`,
-        `\nREMEDIATION:\n${finding.remediation || 'N/A'}`
-      ].join('\n');
-      detail.showModal();
+    function policyChip(policy) {
+      if (policy === 'allowed') return 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20';
+      if (policy === 'prohibited') return 'bg-rose-500/10 text-rose-300 ring-rose-500/20';
+      return 'bg-amber-500/10 text-amber-300 ring-amber-500/20';
     }
+    function renderProgramCards(items = recommendations) {
+      const query = $('#program-search').value.trim().toLowerCase();
+      const container = $('#program-results'); container.replaceChildren();
+      const filtered = items.filter(item => !query || `${item.name || ''} ${item.handle || ''}`.toLowerCase().includes(query));
+      $('#program-empty').classList.toggle('hidden', filtered.length > 0);
+      if (!filtered.length) { $('#program-empty').textContent = query ? 'No programs match that filter.' : 'Run program analysis to populate the shortlist.'; return; }
 
-    detailClose.addEventListener('click', () => detail.close());
-    $('#clear-terminal').addEventListener('click', () => terminal.textContent = '$ AuthLeak terminal cleared');
-
-    async function pollHackerOne(jobId) {
-      try {
-        const response = await fetch(`/api/hackerone/${jobId}`);
-        const job = await response.json();
-        renderProgress(job);
-        if (Array.isArray(job.findings) && job.status === 'complete') renderFindings(job.findings);
-        if (job.status === 'syncing' || job.status === 'scanning' || job.status === 'finishing') return setTimeout(() => pollHackerOne(jobId), 700);
-        h1Button.disabled = false;
-        if (job.status === 'complete') {
-          setGlobalStatus(`HackerOne scan complete · ${job.findings_count || 0} findings`, 'success');
-        } else {
-          setGlobalStatus(job.error || 'HackerOne job failed.', 'error');
-        }
-      } catch (error) {
-        appendLog(`[ui error] ${error.message}`);
-        setTimeout(() => pollHackerOne(jobId), 1200);
-      }
-    }
-
-    function renderIntelCards(recommendations) {
-      const container = $('#intel-results');
-      const empty = $('#intel-empty');
-      container.replaceChildren();
-      empty.classList.toggle('hidden', recommendations.length > 0);
-
-      recommendations.forEach((item, index) => {
-        const profile = item.scope_profile || {};
-        const policy = item.automation_status || 'unknown';
-        const policyClass = policy === 'allowed'
-          ? 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20'
-          : policy === 'prohibited'
-            ? 'bg-rose-500/10 text-rose-300 ring-rose-500/20'
-            : 'bg-amber-500/10 text-amber-300 ring-amber-500/20';
-        const tierClass = item.compatibility_tier === 'strong_fit'
-          ? 'text-cyan-300'
-          : item.compatibility_tier === 'good_fit'
-            ? 'text-slate-200'
-            : 'text-amber-300';
+      filtered.forEach((item, index) => {
+        const p = item.scope_profile || {}; const tier = tierClasses(item.compatibility_tier); const automation = item.automation_status || 'unknown';
+        const bounty = Number(p.eligible_bounty_url_count || 0); const usable = Number(p.usable_url_count ?? p.eligible_url_count ?? 0); const ratio = Math.round(Number(p.bounty_eligible_url_ratio || 0) * 100);
         const card = document.createElement('article');
-        card.className = 'rounded-2xl border border-slate-800 bg-slate-950/80 p-5 transition hover:border-cyan-400/30';
-        const reasons = (item.reasons || []).slice(0, 4).map(reason => `<li>${escapeHtml(reason)}</li>`).join('');
-        const cautions = (item.cautions || []).slice(0, 3).map(reason => `<li>${escapeHtml(reason)}</li>`).join('');
-        const examples = (profile.scope_examples || []).slice(0, 3).map(url => `<span class="rounded-lg bg-slate-900 px-2 py-1 font-mono text-[10px] text-cyan-300">${escapeHtml(url)}</span>`).join('');
+        card.className = selectedProgram?.handle === item.handle ? 'rounded-2xl border border-cyan-400/50 bg-cyan-400/[0.04] p-5 shadow-cyan' : 'rounded-2xl border border-slate-800 bg-slate-950/70 p-5 transition hover:border-slate-600';
+        const reasons = (item.reasons || []).slice(0,3).map(x => `<li>${escapeHtml(x)}</li>`).join('');
+        const cautions = (item.cautions || []).slice(0,2).map(x => `<li>${escapeHtml(x)}</li>`).join('');
         card.innerHTML = `
-          <div class="flex items-start justify-between gap-4">
-            <div>
-              <div class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600">#${index + 1} · ${escapeHtml(item.compatibility_tier || 'review')}</div>
-              <h3 class="mt-1 text-lg font-black">${escapeHtml(item.name || item.handle)}</h3>
-              <div class="mt-1 font-mono text-[11px] text-slate-600">${escapeHtml(item.handle || '')}</div>
-            </div>
-            <div class="text-right">
-              <div class="text-3xl font-black ${tierClass}">${Number(item.compatibility_score || 0)}</div>
-              <div class="text-[9px] uppercase tracking-widest text-slate-600">fit / 100</div>
-            </div>
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><span class="text-[10px] font-black uppercase tracking-[.2em] text-slate-600">#${index+1}</span><span class="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ring-1 ${tier.badge}">${escapeHtml(humanize(item.compatibility_tier || 'review'))}</span><span class="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ring-1 ${policyChip(automation)}">automation: ${escapeHtml(automation)}</span></div><h3 class="mt-2 truncate text-xl font-black">${escapeHtml(item.name || item.handle)}</h3><p class="mt-1 font-mono text-[11px] text-slate-600">${escapeHtml(item.handle || '')}</p></div>
+            <div class="shrink-0 text-right"><div class="text-4xl font-black ${tier.score}">${Number(item.compatibility_score || 0)}</div><div class="text-[9px] uppercase tracking-widest text-slate-600">compatibility</div></div>
           </div>
-          <div class="mt-4 flex flex-wrap gap-2">
-            <span class="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ring-1 ${policyClass}">automation: ${escapeHtml(policy)}</span>
-            <span class="rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-400 ring-1 ring-slate-800">${Number(profile.usable_url_count ?? profile.eligible_url_count ?? 0)} usable URLs</span>
-            <span class="rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-400 ring-1 ring-slate-800">${Number(profile.api_like_url_count || 0)} API-like</span>
-            <span class="rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-400 ring-1 ring-slate-800">${Number(profile.auth_like_url_count || 0)} auth-like</span>
-            <span class="rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-400 ring-1 ring-slate-800">load: ${escapeHtml(profile.scan_load || 'unknown')}</span>
+          <div class="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <div class="rounded-xl bg-slate-900 px-3 py-2.5"><div class="text-[9px] font-bold uppercase tracking-widest text-slate-600">Usable URLs</div><div class="mt-1 font-black">${usable}</div></div>
+            <div class="rounded-xl bg-slate-900 px-3 py-2.5"><div class="text-[9px] font-bold uppercase tracking-widest text-slate-600">API-like</div><div class="mt-1 font-black">${Number(p.api_like_url_count || 0)}</div></div>
+            <div class="rounded-xl bg-slate-900 px-3 py-2.5"><div class="text-[9px] font-bold uppercase tracking-widest text-slate-600">Auth-like</div><div class="mt-1 font-black">${Number(p.auth_like_url_count || 0)}</div></div>
+            <div class="rounded-xl bg-slate-900 px-3 py-2.5"><div class="text-[9px] font-bold uppercase tracking-widest text-slate-600">Bounty coverage</div><div class="mt-1 font-black">${bounty} <span class="text-xs text-slate-500">(${ratio}%)</span></div></div>
           </div>
-          <div class="mt-4">
-            <div class="text-[10px] font-black uppercase tracking-widest text-slate-600">Why it matches</div>
-            <ul class="mt-2 space-y-1 text-xs leading-5 text-slate-400">${reasons || '<li>No positive signal recorded.</li>'}</ul>
-          </div>
-          <div class="mt-4">
-            <div class="text-[10px] font-black uppercase tracking-widest text-slate-600">Scope examples</div>
-            <div class="mt-2 flex flex-wrap gap-2">${examples || '<span class="text-xs text-slate-600">No eligible URL examples.</span>'}</div>
-          </div>
-          ${(profile.scope_exclusions?.count || 0) > 0 ? `<div class="mt-4 rounded-xl border border-slate-800 bg-slate-900/50 p-3"><div class="text-[10px] font-black uppercase tracking-widest text-slate-500">Scope exclusions</div><div class="mt-1 text-xs text-slate-500">${Number(profile.scope_exclusions.count)} report-category exclusion(s) returned by HackerOne.</div></div>` : ''}
-          ${cautions ? `<div class="mt-4 rounded-xl border border-slate-800 bg-slate-900/50 p-3"><div class="text-[10px] font-black uppercase tracking-widest text-amber-300/70">Review before scanning</div><ul class="mt-1 space-y-1 text-xs leading-5 text-slate-500">${cautions}</ul></div>` : ''}
-          <button type="button" class="intel-use mt-4 w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-300 transition hover:border-cyan-400/40 hover:text-cyan-300" data-handle="${escapeHtml(item.handle || '')}">Use program for scope sync</button>`;
-        card.querySelector('.intel-use').addEventListener('click', () => {
-          const handle = card.querySelector('.intel-use').dataset.handle;
-          $('#h1-slug').value = handle;
-          document.querySelector('#hackerone-form')?.scrollIntoView({behavior: 'smooth', block: 'center'});
-          setGlobalStatus(`${item.name || handle} selected. Review the program's scope/policy, then start the direct sync below.`, 'running');
-          appendLog(`[ui] Selected HackerOne program ${handle}; no scan was started automatically.`);
-        });
+          <div class="mt-4 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-widest"><span class="rounded-full bg-slate-900 px-2.5 py-1 text-slate-400 ring-1 ring-slate-800">load: ${escapeHtml(humanize(p.scan_load))}</span><span class="rounded-full bg-slate-900 px-2.5 py-1 text-slate-400 ring-1 ring-slate-800">exclusions: ${Number(p.scope_exclusions?.count || 0)}</span><span class="rounded-full bg-slate-900 px-2.5 py-1 text-slate-400 ring-1 ring-slate-800">test/staging: ${Number(p.test_or_staging_url_count || 0)}</span></div>
+          <div class="mt-4 grid gap-4 lg:grid-cols-2"><div><div class="text-[9px] font-black uppercase tracking-widest text-slate-600">Why it matches</div><ul class="mt-2 space-y-1 text-xs leading-5 text-slate-400">${reasons || '<li>No positive signals.</li>'}</ul></div><div><div class="text-[9px] font-black uppercase tracking-widest text-slate-600">Scope examples</div><div class="mt-2 flex flex-wrap gap-2">${(p.usable_scope_examples || p.scope_examples || []).slice(0,3).map(x => `<span class="rounded-lg bg-slate-900 px-2 py-1 font-mono text-[10px] text-cyan-300">${escapeHtml(x)}</span>`).join('') || '<span class="text-xs text-slate-600">No usable examples.</span>'}</div></div></div>
+          ${cautions ? `<div class="mt-4 rounded-xl border border-amber-400/10 bg-amber-400/[0.03] p-3"><div class="text-[9px] font-black uppercase tracking-widest text-amber-300/70">Review before scanning</div><ul class="mt-1 space-y-1 text-xs leading-5 text-slate-500">${cautions}</ul></div>` : ''}
+          <button type="button" class="review-program mt-5 w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-300 transition hover:border-cyan-400/40 hover:text-cyan-300">Review Scope</button>`;
+        card.querySelector('.review-program').addEventListener('click', () => selectProgram(item));
         container.append(card);
       });
     }
 
-    $('#intel-form').addEventListener('submit', async event => {
-      event.preventDefault();
-      const button = $('#intel-button');
-      button.disabled = true;
-      $('#intel-summary').textContent = 'Analyzing programs and enriching structured scopes…';
-      $('#intel-empty').classList.add('hidden');
-      appendLog('[ui] Starting AuthLeak program intelligence');
+    async function loadFullScope(item) {
+      const panel = $('#selected-panel');
+      panel.insertAdjacentHTML('beforeend', `
+        <div id="scope-detail-loading" class="rounded-2xl border border-violet-400/15 bg-violet-400/[0.03] p-4 text-sm text-slate-400">
+          Loading the complete structured scope from HackerOne…
+        </div>`);
       try {
-        const response = await fetch('/api/hackerone/intelligence', {
+        const response = await fetch('/api/hackerone/scope-detail', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
-            hackerone_username: $('#intel-username').value.trim(),
-            hackerone_api_token: $('#intel-token').value,
-            shortlist_size: Number($('#intel-count').value)
+            hackerone_username: h1Credentials.username,
+            hackerone_api_token: h1Credentials.token,
+            program_slug: item.handle
           })
         });
         const data = await response.json();
-        if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Unable to analyze HackerOne programs');
-        renderIntelCards(data.recommendations || []);
-        $('#intel-summary').textContent = `${data.programs_analyzed || 0} programs analyzed · ${data.scope_enriched || 0} scopes enriched`;
-        appendLog(`[intelligence] ${data.programs_analyzed || 0} programs analyzed; ${data.scope_enriched || 0} shortlist entries enriched.`);
-        setGlobalStatus('Program intelligence complete. Review policy status before scanning.', 'success');
+        if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Unable to load complete scope');
+        item.scope_detail = data;
+        $('#scope-detail-loading')?.remove();
+        renderFullScope(data);
       } catch (error) {
-        $('#intel-summary').textContent = 'Analysis failed.';
-        $('#intel-empty').classList.remove('hidden');
-        setGlobalStatus(error.message, 'error');
-        appendLog(`[error] ${error.message}`);
-      } finally {
-        button.disabled = false;
-      }
-    });
-
-    $('#hackerone-form').addEventListener('submit', async event => {
-      event.preventDefault();
-      h1Button.disabled = true;
-      scanButton.disabled = true;
-      setGlobalStatus('Syncing HackerOne scope…', 'running');
-      appendLog('[ui] Starting HackerOne Platform Sync');
-      try {
-        const response = await fetch('/api/hackerone/sync', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            hackerone_username: $('#h1-username').value.trim(),
-            hackerone_api_token: $('#h1-token').value,
-            program_slug: $('#h1-slug').value.trim()
-          })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : (data.detail?.message || 'Unable to start HackerOne sync'));
-        setActiveTerminalJob(data.job_id, 'hackerone');
-        $('#h1-progress-label').textContent = 'Syncing scope';
-        pollHackerOne(data.job_id);
-      } catch (error) {
-        h1Button.disabled = false;
-        scanButton.disabled = false;
-        setGlobalStatus(error.message, 'error');
-        appendLog(`[error] ${error.message}`);
-      }
-    });
-
-    async function pollScan(jobId) {
-      try {
-        const response = await fetch(`/api/scans/${jobId}`);
-        const data = await response.json();
-        if (data.status === 'running') return setTimeout(() => pollScan(jobId), 700);
-        scanButton.disabled = false;
-        h1Button.disabled = false;
-        if (data.status === 'complete') {
-          renderFindings(data.findings || []);
-          setGlobalStatus(`Manual scan complete · ${(data.findings || []).length} findings`, 'success');
-        } else {
-          setGlobalStatus(data.error || 'Scan failed.', 'error');
-        }
-      } catch (error) {
-        appendLog(`[ui error] ${error.message}`);
-        setTimeout(() => pollScan(jobId), 1200);
+        $('#scope-detail-loading')?.remove();
+        panel.insertAdjacentHTML('beforeend', `<div class="rounded-2xl border border-rose-400/15 bg-rose-400/[0.04] p-4 text-xs leading-5 text-rose-300">Complete scope retrieval failed: ${escapeHtml(error.message)}</div>`);
+        appendLog(`[error] Complete scope retrieval failed for ${item.handle}: ${error.message}`);
       }
     }
 
-    $('#scan-form').addEventListener('submit', async event => {
-      event.preventDefault();
-      scanButton.disabled = true;
-      h1Button.disabled = true;
-      setGlobalStatus('Manual scan running…', 'running');
-      appendLog('[ui] Starting manual scan');
-      try {
-        const response = await fetch('/api/scans', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(Object.fromEntries(new FormData($('#scan-form'))))
+    function renderFullScope(data) {
+      const panel = $('#selected-panel');
+      const summary = data.summary || {};
+      const assets = Array.isArray(data.assets) ? data.assets : [];
+      const exclusions = Array.isArray(data.scope_exclusions) ? data.scope_exclusions : [];
+      const existing = $('#full-scope-explorer');
+      if (existing) existing.remove();
+
+      const explorer = document.createElement('div');
+      explorer.id = 'full-scope-explorer';
+      explorer.className = 'space-y-4';
+      explorer.innerHTML = `
+        <div class="rounded-2xl border border-cyan-400/15 bg-cyan-400/[0.03] p-4">
+          <div class="flex flex-col gap-3">
+            <div>
+              <div class="text-[9px] font-black uppercase tracking-widest text-cyan-300">Complete structured scope</div>
+              <p class="mt-1 text-sm text-slate-400">Every structured-scope asset returned by HackerOne is shown below. Submission and bounty eligibility are displayed per asset.</p>
+            </div>
+            <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div class="rounded-xl bg-slate-950/70 px-3 py-2"><div class="text-[9px] uppercase tracking-widest text-slate-600">Assets</div><div class="mt-1 font-black">${Number(summary.total_assets || assets.length)}</div></div>
+              <div class="rounded-xl bg-slate-950/70 px-3 py-2"><div class="text-[9px] uppercase tracking-widest text-slate-600">In scope</div><div class="mt-1 font-black">${Number(summary.submission_assets || 0)}</div></div>
+              <div class="rounded-xl bg-slate-950/70 px-3 py-2"><div class="text-[9px] uppercase tracking-widest text-slate-600">Bounty</div><div class="mt-1 font-black">${Number(summary.bounty_assets || 0)}</div></div>
+              <div class="rounded-xl bg-slate-950/70 px-3 py-2"><div class="text-[9px] uppercase tracking-widest text-slate-600">URLs</div><div class="mt-1 font-black">${Number(summary.url_assets || 0)}</div></div>
+            </div>
+          </div>
+          <div class="mt-4 grid gap-3 md:grid-cols-[1fr_180px_180px]">
+            <input id="scope-asset-search" type="search" placeholder="Search asset or instruction" class="w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-xs outline-none focus:border-cyan-400">
+            <select id="scope-asset-type" class="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-xs outline-none focus:border-cyan-400"><option value="all">All asset types</option></select>
+            <select id="scope-asset-status" class="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-xs outline-none focus:border-cyan-400"><option value="all">All eligibility</option><option value="submission">In submission scope</option><option value="bounty">Bounty eligible</option><option value="excluded">Not submission eligible</option></select>
+          </div>
+        </div>
+        <div id="scope-asset-list" class="max-h-[52vh] overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950/60"></div>
+        <div id="scope-no-assets" class="hidden rounded-2xl border border-dashed border-slate-800 p-5 text-center text-xs text-slate-500">No scope assets match the current filter.</div>
+        ${exclusions.length ? `<div class="rounded-2xl border border-amber-400/10 bg-amber-400/[0.03] p-4"><div class="text-[9px] font-black uppercase tracking-widest text-amber-300/70">Scope exclusions</div><div class="mt-2 space-y-2">${exclusions.map(x => `<div class="rounded-xl bg-slate-950/60 p-3 text-xs leading-5 text-slate-500"><span class="font-semibold text-slate-400">${escapeHtml(x.label || 'Scope exclusion')}</span>${x.instruction ? `<div class="mt-1">${escapeHtml(x.instruction)}</div>` : ''}</div>`).join('')}</div></div>` : (data.scope_exclusions_error ? `<div class="rounded-2xl border border-amber-400/10 bg-amber-400/[0.03] p-4 text-xs text-slate-500">Scope exclusions could not be retrieved: ${escapeHtml(data.scope_exclusions_error)}</div>` : '')}
+      `;
+      panel.append(explorer);
+
+      const typeSelect = $('#scope-asset-type');
+      const types = [...new Set(assets.map(x => x.asset_type || 'unknown'))].sort();
+      types.forEach(type => { const option = document.createElement('option'); option.value = type; option.textContent = `${humanize(type)} (${assets.filter(x => (x.asset_type || 'unknown') === type).length})`; typeSelect.append(option); });
+
+      function renderFilteredAssets() {
+        const query = $('#scope-asset-search').value.trim().toLowerCase();
+        const assetType = $('#scope-asset-type').value;
+        const status = $('#scope-asset-status').value;
+        const filtered = assets.filter(asset => {
+          const identifier = String(asset.asset_identifier || '').toLowerCase();
+          const instruction = String(asset.instruction || '').toLowerCase();
+          if (query && !identifier.includes(query) && !instruction.includes(query)) return false;
+          if (assetType !== 'all' && (asset.asset_type || 'unknown') !== assetType) return false;
+          if (status === 'submission' && asset.eligible_for_submission !== true) return false;
+          if (status === 'bounty' && asset.eligible_for_bounty !== true) return false;
+          if (status === 'excluded' && asset.eligible_for_submission === true) return false;
+          return true;
         });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || 'Unable to start scan');
-        setActiveTerminalJob(data.job_id, 'manual');
-        pollScan(data.job_id);
-      } catch (error) {
-        scanButton.disabled = false;
-        h1Button.disabled = false;
-        setGlobalStatus(error.message, 'error');
-        appendLog(`[error] ${error.message}`);
+        const list = $('#scope-asset-list');
+        list.replaceChildren();
+        $('#scope-no-assets').classList.toggle('hidden', filtered.length > 0);
+        filtered.forEach((asset, index) => {
+          const row = document.createElement('article');
+          const submission = asset.eligible_for_submission === true;
+          const bounty = asset.eligible_for_bounty === true;
+          const instruction = String(asset.instruction || '').trim();
+          row.className = 'border-b border-slate-800/80 p-4 last:border-b-0';
+          row.innerHTML = `
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-slate-900 px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-slate-500">#${index + 1}</span>
+                  <span class="rounded-full bg-slate-900 px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-slate-400">${escapeHtml(humanize(asset.asset_type || 'unknown'))}</span>
+                  <span class="rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-widest ${submission ? 'bg-emerald-500/10 text-emerald-300' : 'bg-slate-800 text-slate-500'}">${submission ? 'submission eligible' : 'not submission eligible'}</span>
+                  <span class="rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-widest ${bounty ? 'bg-cyan-500/10 text-cyan-300' : 'bg-slate-800 text-slate-500'}">${bounty ? 'bounty eligible' : 'no bounty'}</span>
+                  ${asset.max_severity ? `<span class="rounded-full bg-slate-900 px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-slate-400">max: ${escapeHtml(asset.max_severity)}</span>` : ''}
+                </div>
+                <div class="mt-3 break-all font-mono text-xs text-cyan-300">${escapeHtml(asset.asset_identifier || '(no identifier)')}</div>
+                ${instruction ? `<div class="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-500">${escapeHtml(instruction)}</div>` : '<div class="mt-2 text-xs text-slate-700">No asset-specific instruction.</div>'}
+              </div>
+              <div class="shrink-0 text-[10px] text-slate-700">id ${escapeHtml(asset.id || '—')}</div>
+            </div>`;
+          list.append(row);
+        });
       }
+      $('#scope-asset-search').addEventListener('input', renderFilteredAssets);
+      $('#scope-asset-type').addEventListener('change', renderFilteredAssets);
+      $('#scope-asset-status').addEventListener('change', renderFilteredAssets);
+      renderFilteredAssets();
+    }
+
+    function selectProgram(item) {
+      selectedProgram = item;
+      $('#stat-selected').textContent = item.name || item.handle;
+      $('#stat-selected-detail').textContent = `${item.scope_profile?.usable_url_count ?? 0} usable URL assets · ${item.scope_profile?.eligible_bounty_url_count ?? 0} bounty-eligible`;
+      $('#selected-tier').textContent = humanize(item.compatibility_tier || 'review');
+      $('#selected-tier').className = `rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ring-1 ${tierClasses(item.compatibility_tier).badge}`;
+      $('#selected-empty').classList.add('hidden'); $('#selected-panel').classList.remove('hidden');
+      const p = item.scope_profile || {}; const exclusions = (p.scope_exclusions?.examples || []).slice(0,5); const cautions = (item.cautions || []).slice(0,5);
+      $('#selected-panel').innerHTML = `
+        <div><h3 class="text-lg font-black">${escapeHtml(item.name || item.handle)}</h3><p class="mt-1 font-mono text-[11px] text-slate-600">${escapeHtml(item.handle || '')}</p></div>
+        <div class="grid grid-cols-2 gap-2 sm:grid-cols-4"><div class="rounded-xl bg-slate-950/70 p-3"><div class="text-[9px] uppercase tracking-widest text-slate-600">Compatibility</div><div class="mt-1 text-2xl font-black">${Number(item.compatibility_score || 0)}</div></div><div class="rounded-xl bg-slate-950/70 p-3"><div class="text-[9px] uppercase tracking-widest text-slate-600">Usable</div><div class="mt-1 text-2xl font-black">${Number(p.usable_url_count || 0)}</div></div><div class="rounded-xl bg-slate-950/70 p-3"><div class="text-[9px] uppercase tracking-widest text-slate-600">API/auth</div><div class="mt-1 text-2xl font-black">${Number(p.api_like_url_count || 0)}/${Number(p.auth_like_url_count || 0)}</div></div><div class="rounded-xl bg-slate-950/70 p-3"><div class="text-[9px] uppercase tracking-widest text-slate-600">Load</div><div class="mt-1 text-lg font-black">${escapeHtml(humanize(p.scan_load))}</div></div></div>
+        <div><div class="text-[9px] font-black uppercase tracking-widest text-slate-600">Shortlist scope preview</div><div class="mt-2 flex flex-wrap gap-2">${(p.usable_scope_examples || p.scope_examples || []).map(x => `<span class="rounded-lg bg-slate-950/70 px-2 py-1 font-mono text-[10px] text-cyan-300">${escapeHtml(x)}</span>`).join('') || '<span class="text-xs text-slate-500">None</span>'}</div></div>
+        ${exclusions.length ? `<div><div class="text-[9px] font-black uppercase tracking-widest text-slate-600">Scope exclusion preview</div><ul class="mt-2 space-y-1 text-xs leading-5 text-slate-500">${exclusions.map(x => `<li>• ${escapeHtml(x)}</li>`).join('')}</ul></div>` : ''}
+        ${cautions.length ? `<div class="rounded-xl border border-amber-400/10 bg-amber-400/[0.03] p-3"><div class="text-[9px] font-black uppercase tracking-widest text-amber-300/70">Policy / operational cautions</div><ul class="mt-1 space-y-1 text-xs leading-5 text-slate-500">${cautions.map(x => `<li>• ${escapeHtml(x)}</li>`).join('')}</ul></div>` : ''}
+      `;
+      $('#session-tenant').value = item.handle || '';
+      $('#scope-confirm').checked = false;
+      updateSyncGate();
+      renderProgramCards();
+      $('#program-workspace').scrollIntoView({behavior:'smooth', block:'start'});
+      setGlobalStatus(`${item.name || item.handle} selected. Loading complete scope; review policy, then confirm authorization.`, 'running');
+      appendLog(`[ui] Selected ${item.handle}; retrieving complete structured scope; no scan started automatically.`);
+      loadFullScope(item).then(() => setGlobalStatus(`${item.name || item.handle} scope loaded. Review policy, then confirm authorization.`, 'success'));
+    }
+
+    function updateSyncGate() {
+      const ready = Boolean(selectedProgram && $('#scope-confirm').checked);
+      $('#sync-button').disabled = !ready;
+      $('#sync-note').textContent = ready ? 'Authorization confirmed in the dashboard. The next action will sync the selected program scope and begin its sequential scan.' : 'Select a program, review its scope, and confirm authorization to enable the scan control.';
+    }
+    $('#scope-confirm').addEventListener('change', updateSyncGate);
+    $('#program-search').addEventListener('input', () => renderProgramCards());
+
+    $('#intel-form').addEventListener('submit', async event => {
+      event.preventDefault(); const button = $('#intel-button'); button.disabled = true;
+      h1Credentials = {username: $('#intel-username').value.trim(), token: $('#intel-token').value};
+      setGlobalStatus('Analyzing programs and structured scopes…', 'running'); appendLog('[ui] Starting AuthLeak program intelligence');
+      try {
+        const response = await fetch('/api/hackerone/intelligence',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({hackerone_username:h1Credentials.username,hackerone_api_token:h1Credentials.token,shortlist_size:Number($('#intel-count').value)})});
+        const data = await response.json(); if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Unable to analyze HackerOne programs');
+        recommendations = data.recommendations || []; selectedProgram = null;
+        renderStats(data); renderProgramCards();
+        $('#intel-summary').textContent = `${data.programs_analyzed || 0} programs analyzed · ${data.scope_enriched || 0} scopes enriched`;
+        appendLog(`[intelligence] ${data.programs_analyzed || 0} programs analyzed; ${data.scope_enriched || 0} shortlist entries enriched.`);
+        setGlobalStatus('Intelligence complete. Select a program for scope review.', 'success');
+      } catch (error) { setGlobalStatus(error.message, 'error'); appendLog(`[error] ${error.message}`); }
+      finally { button.disabled = false; }
     });
+
+    async function startHackerOneSync() {
+      if (!selectedProgram || !$('#scope-confirm').checked) return;
+      $('#sync-button').disabled = true; setGlobalStatus(`Syncing ${selectedProgram.name || selectedProgram.handle} scope…`, 'running'); appendLog('[ui] Starting selected HackerOne scope sync');
+      try {
+        const response = await fetch('/api/hackerone/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({hackerone_username:h1Credentials.username,hackerone_api_token:h1Credentials.token,program_slug:selectedProgram.handle})});
+        const data = await response.json(); if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : (data.detail?.message || 'Unable to start HackerOne sync'));
+        setActiveTerminalJob(data.job_id, 'hackerone'); $('#stat-scan').textContent = 'Running'; $('#stat-scan-detail').textContent = selectedProgram.name || selectedProgram.handle; pollHackerOne(data.job_id);
+      } catch (error) { $('#sync-button').disabled = false; setGlobalStatus(error.message, 'error'); appendLog(`[error] ${error.message}`); updateSyncGate(); }
+    }
+    $('#sync-button').addEventListener('click', startHackerOneSync);
+
+    function renderProgress(job) {
+      const imported = Number(job.imported_assets || 0), total = Number(job.total || 0), completed = Number(job.completed || 0), failed = Number(job.failed || 0), findings = Number(job.findings_count || 0);
+      const done = completed + failed, percentage = total ? Math.round((done/total)*100) : 0;
+      $('#stat-scan').textContent = job.status === 'complete' ? 'Complete' : job.status === 'error' ? 'Error' : `${percentage}%`;
+      $('#stat-scan-detail').textContent = `${done}/${total} assets · ${findings} findings · imported ${imported}`;
+      $('#sync-note').textContent = job.current ? `Current asset: ${job.current}` : `Batch status: ${job.status || 'unknown'}`;
+    }
+    async function pollHackerOne(jobId) {
+      try { const response = await fetch(`/api/hackerone/${jobId}`); const job = await response.json(); renderProgress(job); if (Array.isArray(job.findings) && job.status === 'complete') renderFindings(job.findings); if (job.status === 'syncing' || job.status === 'scanning' || job.status === 'finishing') return setTimeout(() => pollHackerOne(jobId),700); if (job.status === 'complete') { setGlobalStatus(`HackerOne batch complete · ${job.findings_count || 0} findings`, 'success'); } else setGlobalStatus(job.error || 'HackerOne job failed.', 'error'); updateSyncGate(); } catch (error) { appendLog(`[ui error] ${error.message}`); setTimeout(() => pollHackerOne(jobId),1200); }
+    }
+
+    function renderFindings(findings) {
+      $('#finding-count').textContent = `${findings.length} result${findings.length === 1 ? '' : 's'}`; results.replaceChildren();
+      if (!findings.length) { results.innerHTML = '<p class="text-slate-500">No findings were confirmed by the automated checks.</p>'; return; }
+      findings.forEach(finding => {
+        const card = document.createElement('button'); const severity = finding.severity || 'Unknown';
+        const sevClass = severity === 'Critical' ? 'bg-rose-500/10 text-rose-300 ring-rose-500/30' : severity === 'High' ? 'bg-amber-500/10 text-amber-300 ring-amber-500/30' : 'bg-slate-800 text-slate-300 ring-slate-700';
+        card.className = 'rounded-2xl border border-slate-800 bg-slate-900 p-5 text-left transition hover:-translate-y-0.5 hover:border-cyan-400/40';
+        card.innerHTML = `<div class="flex items-start justify-between gap-3"><span class="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ring-1 ${sevClass}">${escapeHtml(severity)}</span><span class="text-[10px] uppercase tracking-widest text-slate-500">${escapeHtml(finding.type || '')}</span></div><h3 class="mt-4 text-lg font-bold"></h3><p class="mt-2 text-sm leading-6 text-slate-400"></p><p class="mt-4 break-all font-mono text-[11px] text-cyan-300"></p><p class="mt-3 text-xs font-semibold text-slate-500">Open evidence →</p>`;
+        card.querySelector('h3').textContent = finding.title || 'Untitled finding'; card.querySelector('p:nth-of-type(1)').textContent = finding.description || ''; card.querySelector('p:nth-of-type(2)').textContent = finding.source || ''; card.addEventListener('click', () => openFinding(finding)); results.append(card);
+      });
+    }
+    function openFinding(finding) { $('#detail-title').textContent = `${finding.title || 'Finding'} — ${finding.severity || 'Unknown'}`; $('#detail-description').textContent = finding.description || ''; $('#detail-content').textContent = [`Evidence:\n${finding.evidence || 'N/A'}`,`Source:\n${finding.source || 'N/A'}`,`\nCURL:\n${finding.curl || finding.poc_curl || 'N/A'}`,`\nPYTHON:\n${finding.python || 'N/A'}`,`\nREMEDIATION:\n${finding.remediation || 'N/A'}`].join('\n'); detail.showModal(); }
+    $('#detail-close').addEventListener('click', () => detail.close());
+    $('#clear-terminal').addEventListener('click', () => terminal.textContent = '$ AuthLeak terminal cleared');
+
+    async function pollScan(jobId) {
+      try { const response = await fetch(`/api/scans/${jobId}`); const data = await response.json(); if (data.status === 'running') return setTimeout(() => pollScan(jobId),700); $('#scan-button').disabled = false; if (data.status === 'complete') { renderFindings(data.findings || []); setGlobalStatus(`Manual scan complete · ${(data.findings || []).length} findings`, 'success'); } else setGlobalStatus(data.error || 'Scan failed.', 'error'); } catch (error) { appendLog(`[ui error] ${error.message}`); setTimeout(() => pollScan(jobId),1200); }
+    }
+    $('#scan-form').addEventListener('submit', async event => { event.preventDefault(); $('#scan-button').disabled = true; setGlobalStatus('Manual scan running…','running'); appendLog('[ui] Starting manual scan'); try { const response = await fetch('/api/scans',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData($('#scan-form'))))}); const data = await response.json(); if (!response.ok) throw new Error(data.detail || 'Unable to start scan'); setActiveTerminalJob(data.job_id,'manual'); pollScan(data.job_id); } catch (error) { $('#scan-button').disabled = false; setGlobalStatus(error.message,'error'); appendLog(`[error] ${error.message}`); } });
   </script>
 </body>
 </html>
