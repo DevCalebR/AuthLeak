@@ -28,7 +28,15 @@ async def handle_login(username: str = Form(...)):
 
 @app.get("/static/app.js", response_class=HTMLResponse)
 async def mock_js_file():
-    return 'console.log("App Initialized..."); const googleApiKey = "AIzaSyAz1234567890O_FakeGoogleTokenKeyXYZ";'
+    return """
+console.log("App Initialized...");
+const googleApiKey = "AIzaSyAz1234567890O_FakeGoogleTokenKeyXYZ";
+
+fetch("/api/v1/invoice/123")
+    .then(response => response.json())
+    .then(data => console.log("Invoice response:", data))
+    .catch(error => console.error("Invoice request failed:", error));
+"""
 
 @app.get("/", response_class=HTMLResponse)
 async def home():

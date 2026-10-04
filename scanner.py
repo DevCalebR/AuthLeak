@@ -601,7 +601,7 @@ async def autonomous_crawl_and_scan(
                 except ValueError:
                     await _emit(log_cb, "[warn] Ignoring invalid optional API endpoint")
 
-            await _emit(log_cb, f"[engine-a] Inspecting {len(scripts)} JavaScript assets")
+            await _emit(log_cb, f"[engine-a] Inspecting {len(script_urls)} JavaScript assets")
 
             async with httpx.AsyncClient(
                 timeout=HTTP_TIMEOUT_SECONDS,
