@@ -20,6 +20,7 @@ import json
 import os
 import re
 from collections import deque
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Literal
@@ -35,6 +36,22 @@ from scope_policy import ScopePolicy
 LogCallback = Callable[[str], Awaitable[None]]
 ProgressCallback = Callable[[dict[str, Any]], Awaitable[None]]
 SessionType = Literal["victim", "attacker"]
+
+@dataclass
+class AuthenticatedObservation:
+    """Metadata-only record of an authenticated endpoint observation."""
+
+    session_type: SessionType
+    method: str
+    url: str
+    status: int | None = None
+    resource_type: str = ""
+    in_scope: bool = True
+    authenticated: bool = False
+    observed_at: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 ROOT_DIR = Path(__file__).resolve().parent
 SESSIONS_DIR = ROOT_DIR / "sessions"
