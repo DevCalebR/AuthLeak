@@ -122,6 +122,21 @@ class AssetInventory:
         """Record an out-of-scope URL that was discovered but never fetched."""
         self._add(self.blocked_urls, url)
 
+    def summary(self) -> dict[str, object]:
+        """Return compact counts suitable for scan progress updates."""
+        return {
+            "discovered_urls": len(self.discovered_urls),
+            "api_urls": len(self.api_urls),
+            "script_urls": len(self.script_urls),
+            "link_urls": len(self.link_urls),
+            "form_urls": len(self.form_urls),
+            "blocked_urls": len(self.blocked_urls),
+            "resource_type_counts": dict(sorted(self.resource_type_counts.items())),
+            "method_counts": dict(sorted(self.method_counts.items())),
+            "host_counts": dict(sorted(self.host_counts.items())),
+            "status_counts": dict(sorted(self.status_counts.items())),
+        }
+
     def to_dict(self) -> dict[str, object]:
         return {
             "limits": {"max_items_per_collection": self.max_items},
