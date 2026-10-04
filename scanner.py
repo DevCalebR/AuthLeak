@@ -498,6 +498,7 @@ async def autonomous_crawl_and_scan(
                     method=request.method,
                     status_code=response.status,
                     resource_type=request.resource_type,
+                    in_scope=True,
                 )
 
             async def handle_request(request: Request) -> None:
@@ -518,6 +519,7 @@ async def autonomous_crawl_and_scan(
                     method=method,
                     resource_type=request.resource_type,
                     api_like=bool(api_like),
+                    in_scope=True,
                 )
 
                 if method not in SAFE_METHODS:
