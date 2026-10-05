@@ -23,6 +23,7 @@ from scanner import (
     autonomous_crawl_and_scan,
     bind_scan_context,
     harvest_session,
+    replay_authenticated_endpoints,
     reset_scan_context,
     sequential_batch_scan,
     session_is_stored,
@@ -323,6 +324,8 @@ async def execute_hackerone_sync(
                 findings=[],
                 report=str(report),
                 inventory=AssetInventory().to_dict(),
+                authenticated_observations=[],
+                authenticated_observations_count=0,
             )
             await publish(
                 job_id,
@@ -369,6 +372,35 @@ async def execute_hackerone_sync(
         finally:
             reset_scan_context(context_token)
 
+        authenticated_observations: list[dict[str, Any]] = []
+
+        for session_type in ("victim", "attacker"):
+            if not session_is_stored(
+                session_type,
+                tenant=slug,
+            ):
+                await publish(
+                    job_id,
+                    f"[authenticated] No stored {session_type} session; skipping replay.",
+                )
+                continue
+
+            observations = await replay_authenticated_endpoints(
+                batch_inventory,
+                session_type,
+                tenant=slug,
+                scope_policy=scope_policy,
+                log_cb=batch_log,
+            )
+            authenticated_observations.extend(
+                observation.to_dict() for observation in observations
+            )
+
+        await publish(
+            job_id,
+            f"[authenticated] Replay complete: {len(authenticated_observations)} observations.",
+        )
+
         report = write_markdown_report(findings, slug, report_prefix="hackerone")
         hackerone_jobs[job_id].update(
             status="complete",
@@ -377,6 +409,8 @@ async def execute_hackerone_sync(
             findings_count=len(findings),
             report=str(report),
             inventory=batch_inventory.to_dict(),
+            authenticated_observations=authenticated_observations,
+            authenticated_observations_count=len(authenticated_observations),
             scope=scope_policy.describe(),
         )
         await publish(job_id, f"[complete] HackerOne batch finished; report: {report.name}")
