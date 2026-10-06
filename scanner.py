@@ -30,6 +30,7 @@ import httpx
 from bs4 import BeautifulSoup
 from playwright.async_api import Request, Response, Route, async_playwright
 
+from authorization_compare import compare_authenticated_observations
 from asset_inventory import AssetInventory
 from scope_policy import ScopePolicy
 
@@ -766,15 +767,17 @@ async def autonomous_crawl_and_scan(
                             _record_finding(finding, scan_findings)
                             await _emit(log_cb, f"[finding] {finding['title']} in {full_script_url}")
 
-            # Engine B: TokenSwap / authorization-boundary checks.
-            if not response_criteria:
+            # Engine B: metadata-only authorization-boundary checks.
+            #
+            # B3.2 deliberately separates authenticated observation from
+            # authorization comparison. Response bodies and response criteria
+            # are not used to determine candidates.
+
+            if not discovered_apis:
                 await _emit(
                     log_cb,
-                    "[tokenswap] Skipped: no response criteria configured. "
-                    "Set AUTHLEAK_RESPONSE_CRITERIA for automated batch checks.",
+                    "[tokenswap] No safe GET/HEAD/OPTIONS API routes discovered",
                 )
-            elif not discovered_apis:
-                await _emit(log_cb, "[tokenswap] No safe GET/HEAD/OPTIONS API routes discovered")
             else:
                 victim_profile = _read_session_profile(
                     "victim",
@@ -788,28 +791,57 @@ async def autonomous_crawl_and_scan(
                 )
                 victim_profile_headers = _headers_from_profile(victim_profile)
                 attacker_profile_headers = _headers_from_profile(attacker_profile)
+
                 explicit_victim_headers, explicit_attacker_headers = _token_headers(
                     victim_token,
                     attacker_token,
                 )
-                victim_headers = _merge_headers(victim_profile_headers, explicit_victim_headers)
-                attacker_headers = _merge_headers(attacker_profile_headers, explicit_attacker_headers)
 
-                if not attacker_headers:
-                    await _emit(log_cb, "[tokenswap] No attacker session profile/token found; skipping")
-                else:
+                victim_headers = _merge_headers(
+                    victim_profile_headers,
+                    explicit_victim_headers,
+                )
+                attacker_headers = _merge_headers(
+                    attacker_profile_headers,
+                    explicit_attacker_headers,
+                )
+
+                if not victim_headers:
                     await _emit(
                         log_cb,
-                        f"[tokenswap] Testing {len(discovered_apis)} safe API routes with tenant session profiles",
+                        "[tokenswap] No victim session profile/token found; "
+                        "authorization comparison requires both sessions",
                     )
+
+                if not attacker_headers:
+                    await _emit(
+                        log_cb,
+                        "[tokenswap] No attacker session profile/token found; skipping",
+                    )
+
+                if victim_headers and attacker_headers:
+                    await _emit(
+                        log_cb,
+                        f"[tokenswap] Testing {len(discovered_apis)} safe API routes "
+                        "with metadata-only authorization comparison",
+                    )
+
+                    victim_observations: list[AuthenticatedObservation] = []
+                    attacker_observations: list[AuthenticatedObservation] = []
+
                     async with httpx.AsyncClient(
                         timeout=HTTP_TIMEOUT_SECONDS,
                         follow_redirects=False,
-                        headers={"User-Agent": "AuthLeak/1.3 (+authorized-security-testing)"},
+                        headers={
+                            "User-Agent": "AuthLeak/1.3 (+authorized-security-testing)"
+                        },
                     ) as client:
                         for api_url, method in discovered_apis.items():
+                            method = method.upper()
+
                             if method not in SAFE_METHODS:
                                 continue
+
                             if scope_policy is not None and not scope_policy.allows(api_url):
                                 inventory.record_blocked(api_url)
                                 await _emit(
@@ -817,80 +849,116 @@ async def autonomous_crawl_and_scan(
                                     f"[scope] TokenSwap blocked out-of-scope API: {api_url}",
                                 )
                                 continue
-                            await _emit(log_cb, f"[tokenswap] Checking {api_url}")
+
+                            await _emit(
+                                log_cb,
+                                f"[tokenswap] Checking {api_url}",
+                            )
+
+                            observed_at = datetime.now(timezone.utc).isoformat()
+
                             try:
-                                victim_response = None
-                                if victim_headers:
-                                    victim_response = await client.request(
-                                        method,
-                                        api_url,
-                                        headers=victim_headers,
+                                victim_response = await client.request(
+                                    method,
+                                    api_url,
+                                    headers=victim_headers,
+                                )
+                                victim_observations.append(
+                                    AuthenticatedObservation(
+                                        session_type="victim",
+                                        method=method,
+                                        url=api_url,
+                                        status=victim_response.status_code,
+                                        resource_type="api",
+                                        in_scope=True,
+                                        authenticated=True,
+                                        observed_at=observed_at,
                                     )
+                                )
 
                                 attacker_response = await client.request(
                                     method,
                                     api_url,
                                     headers=attacker_headers,
                                 )
-
-                                victim_match = bool(
-                                    victim_response
-                                    and response_criteria in victim_response.text
-                                    and victim_response.status_code < 400
+                                attacker_observations.append(
+                                    AuthenticatedObservation(
+                                        session_type="attacker",
+                                        method=method,
+                                        url=api_url,
+                                        status=attacker_response.status_code,
+                                        resource_type="api",
+                                        in_scope=True,
+                                        authenticated=True,
+                                        observed_at=observed_at,
+                                    )
                                 )
-                                attacker_match = (
-                                    attacker_response.status_code < 400
-                                    and response_criteria in attacker_response.text
-                                )
 
-                                if attacker_match and (
-                                    victim_match or not victim_headers
-                                ):
-                                    confidence = (
-                                        "Observed matching protected content with both victim and attacker "
-                                        "sessions."
-                                        if victim_match
-                                        else "Attacker session received matching protected content without "
-                                        "a local victim baseline."
-                                    )
-                                    evidence = (
-                                        f"{confidence} HTTP {attacker_response.status_code}; "
-                                        f"matched response criteria '{response_criteria}'."
-                                    )
-                                    finding = _make_finding(
-                                        finding_type="Broken Object Level Authorization (IDOR)",
-                                        title="Potential IDOR / Authorization Boundary Bypass",
-                                        severity="Critical",
-                                        description=(
-                                            "A second authenticated session received protected response content "
-                                            "matching the configured victim-response criteria from an API route. "
-                                            "Manual verification is recommended before submission."
-                                        ),
-                                        evidence=evidence,
-                                        source=api_url,
-                                        curl=(
-                                            f"curl -i -X {method} '{api_url}' "
-                                            f"{_safe_curl_headers(attacker_headers)}"
-                                        ),
-                                        python_code=(
-                                            "import requests\n\n"
-                                            f"url = {api_url!r}\n"
-                                            f"r = requests.{method.lower()}(url, headers={{" 
-                                            "'Authorization': '<SESSION_REDACTED>'" 
-                                            "}, timeout=10)\n"
-                                            "print(r.status_code)\nprint(r.text)"
-                                        ),
-                                        remediation=(
-                                            "Enforce object-level authorization on every resource access. "
-                                            "Derive the allowed principal from the authenticated session and "
-                                            "verify ownership/permission before returning protected records."
-                                        ),
-                                    )
-                                    _record_finding(finding, scan_findings)
-                                    await _emit(log_cb, f"[finding] {finding['title']} at {api_url}")
                             except Exception as error:
-                                await _emit(log_cb, f"[tokenswap] Request failed for {api_url}: {error}")
+                                await _emit(
+                                    log_cb,
+                                    f"[tokenswap] Request failed for {api_url}: {error}",
+                                )
 
+                    comparisons = compare_authenticated_observations(
+                        victim_observations,
+                        attacker_observations,
+                    )
+
+                    for comparison in comparisons:
+                        if not comparison.candidate:
+                            continue
+
+                        evidence = (
+                            "Authenticated authorization comparison produced a "
+                            f"manual-review candidate: victim HTTP "
+                            f"{comparison.victim_status}; attacker HTTP "
+                            f"{comparison.attacker_status}; reason "
+                            f"'{comparison.reason}'. No response body or "
+                            "credential material was used."
+                        )
+
+                        finding = _make_finding(
+                            finding_type="Potential Authorization Boundary Issue",
+                            title="Potential Authorization Boundary Bypass",
+                            severity="Medium",
+                            description=(
+                                "A metadata-only comparison found an authenticated "
+                                "access outcome that warrants manual authorization "
+                                "review. This is a candidate, not a confirmed "
+                                "IDOR/BOLA finding."
+                            ),
+                            evidence=evidence,
+                            source=comparison.url,
+                            curl=(
+                                f"curl -i -X {comparison.method} "
+                                f"'{comparison.url}' "
+                                f"{_safe_curl_headers(attacker_headers)}"
+                            ),
+                            python_code=(
+                                "import requests\n\n"
+                                f"url = {comparison.url!r}\n"
+                                f"r = requests.{comparison.method.lower()}("
+                                "url, "
+                                "headers={'Authorization': '<SESSION_REDACTED>'}, "
+                                "timeout=10"
+                                ")\n"
+                                "print(r.status_code)"
+                            ),
+                            remediation=(
+                                "Enforce object-level authorization on every "
+                                "resource access. Derive the allowed principal "
+                                "from the authenticated session and verify "
+                                "ownership or permission before returning "
+                                "protected records."
+                            ),
+                        )
+
+                        _record_finding(finding, scan_findings)
+                        await _emit(
+                            log_cb,
+                            f"[finding] {finding['title']} at {comparison.url}",
+                        )
             await _emit(
                 log_cb,
                 f"[complete] Target finished: {len(scan_findings)} findings in this asset",
