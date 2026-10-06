@@ -161,6 +161,18 @@
       <div class="mb-4 flex items-center justify-between gap-3"><div><span class="rounded-full bg-rose-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.2em] text-rose-300">Findings</span><h2 class="mt-2 text-2xl font-black">Evidence queue</h2></div><span id="finding-count" class="text-sm text-slate-400">0 results</span></div>
       <div id="results" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3"><p class="text-slate-500">Run a scan to populate findings.</p></div>
     </section>
+    <section id="authorization-review-section" class="mt-8 hidden">
+      <div class="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <span class="rounded-full bg-amber-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.2em] text-amber-300">Authorization Review</span>
+          <h2 class="mt-2 text-2xl font-black">Access boundary candidates</h2>
+          <p class="mt-1 max-w-3xl text-sm leading-6 text-slate-400">These metadata-only comparisons deserve manual verification. They are <strong class="text-amber-300">not confirmed vulnerabilities</strong>.</p>
+        </div>
+        <span id="authorization-candidate-count" class="text-sm text-amber-300">0 candidates</span>
+      </div>
+
+      <div id="authorization-results" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
+    </section>
   </main>
 
   <dialog id="detail" class="w-[min(960px,94vw)] rounded-3xl border border-slate-700 bg-slate-900 p-6 text-slate-100 backdrop:bg-black/70">
@@ -467,7 +479,51 @@
       $('#sync-note').textContent = job.current ? `Current asset: ${job.current}` : `Batch status: ${job.status || 'unknown'}`;
     }
     async function pollHackerOne(jobId) {
-      try { const response = await fetch(`/api/hackerone/${jobId}`); const job = await response.json(); renderProgress(job); if (Array.isArray(job.findings) && job.status === 'complete') renderFindings(job.findings); if (job.status === 'syncing' || job.status === 'scanning' || job.status === 'finishing') return setTimeout(() => pollHackerOne(jobId),700); if (job.status === 'complete') { setGlobalStatus(`HackerOne batch complete · ${job.findings_count || 0} findings`, 'success'); } else setGlobalStatus(job.error || 'HackerOne job failed.', 'error'); updateSyncGate(); } catch (error) { appendLog(`[ui error] ${error.message}`); setTimeout(() => pollHackerOne(jobId),1200); }
+      try { const response = await fetch(`/api/hackerone/${jobId}`); const job = await response.json(); renderProgress(job); if (Array.isArray(job.findings) && job.status === 'complete') renderFindings(job.findings); if (job.status === 'complete') renderAuthorizationComparisons(job.authorization_comparisons || []); if (job.status === 'syncing' || job.status === 'scanning' || job.status === 'finishing') return setTimeout(() => pollHackerOne(jobId),700); if (job.status === 'complete') { setGlobalStatus(`HackerOne batch complete · ${job.findings_count || 0} findings`, 'success'); } else setGlobalStatus(job.error || 'HackerOne job failed.', 'error'); updateSyncGate(); } catch (error) { appendLog(`[ui error] ${error.message}`); setTimeout(() => pollHackerOne(jobId),1200); }
+    }
+
+    function renderAuthorizationComparisons(comparisons) {
+      const section = $('#authorization-review-section');
+      const container = $('#authorization-results');
+      const candidates = comparisons.filter(comparison => comparison && comparison.candidate === true);
+
+      section.classList.toggle('hidden', candidates.length === 0);
+      $('#authorization-candidate-count').textContent = `${candidates.length} candidate${candidates.length === 1 ? '' : 's'}`;
+      container.replaceChildren();
+
+      candidates.forEach(comparison => {
+        const card = document.createElement('article');
+        card.className = 'rounded-2xl border border-amber-500/20 bg-slate-900 p-5';
+
+        const method = String(comparison.method || 'UNKNOWN').toUpperCase();
+        const url = String(comparison.url || 'Unknown endpoint');
+        const victimStatus = comparison.victim_status == null ? 'Unknown' : String(comparison.victim_status);
+        const attackerStatus = comparison.attacker_status == null ? 'Unknown' : String(comparison.attacker_status);
+        const reason = String(comparison.reason || 'Manual review required');
+
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-3">
+            <span class="rounded-full bg-amber-400/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-amber-300 ring-1 ring-amber-500/30">Manual review</span>
+            <span class="text-[10px] uppercase tracking-widest text-slate-500">Authorization</span>
+          </div>
+          <h3 class="mt-4 text-lg font-bold">${escapeHtml(method)}</h3>
+          <p class="mt-2 break-all font-mono text-[11px] text-cyan-300">${escapeHtml(url)}</p>
+          <dl class="mt-4 grid grid-cols-2 gap-3 text-xs">
+            <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+              <dt class="text-slate-500">Victim status</dt>
+              <dd class="mt-1 font-mono font-bold text-slate-200">${escapeHtml(victimStatus)}</dd>
+            </div>
+            <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+              <dt class="text-slate-500">Attacker status</dt>
+              <dd class="mt-1 font-mono font-bold text-slate-200">${escapeHtml(attackerStatus)}</dd>
+            </div>
+          </dl>
+          <p class="mt-4 text-xs leading-5 text-slate-400">Reason: <span class="text-slate-300">${escapeHtml(reason)}</span></p>
+          <p class="mt-4 text-[11px] font-semibold uppercase tracking-wider text-amber-300">Not confirmed — verify authorization manually</p>
+        `;
+
+        container.append(card);
+      });
     }
 
     function renderFindings(findings) {
