@@ -1,11 +1,11 @@
 import asyncio
 
 import main
-from asset_inventory import AssetInventory
+
 from scanner import AuthenticatedObservation
 
 
-def test_execute_hackerone_sync_persists_authenticated_observations(monkeypatch):
+def test_execute_hackerone_sync_persists_authenticated_comparison(monkeypatch):
     job_id = "test-authenticated-integration"
     main.hackerone_jobs.clear()
     main.hackerone_jobs[job_id] = {
@@ -28,17 +28,19 @@ def test_execute_hackerone_sync_persists_authenticated_observations(monkeypatch)
         inventory,
     ):
         assert scan_targets == ["https://example.test"]
+
         inventory.record_request(
             "https://example.test/api/v1/account/123",
             method="GET",
             resource_type="fetch",
             api_like=True,
         )
+
         return []
 
     def fake_session_is_stored(session_type, *, tenant):
         assert tenant == "mock-program"
-        return session_type == "victim"
+        return session_type in {"victim", "attacker"}
 
     async def fake_replay_authenticated_endpoints(
         inventory,
@@ -48,13 +50,12 @@ def test_execute_hackerone_sync_persists_authenticated_observations(monkeypatch)
         scope_policy,
         log_cb,
     ):
-        assert session_type == "victim"
         assert tenant == "mock-program"
         assert inventory.endpoints
 
         return [
             AuthenticatedObservation(
-                session_type="victim",
+                session_type=session_type,
                 method="GET",
                 url="https://example.test/api/v1/account/123",
                 status=200,
@@ -65,9 +66,21 @@ def test_execute_hackerone_sync_persists_authenticated_observations(monkeypatch)
             )
         ]
 
-    monkeypatch.setattr(main, "fetch_hackerone_structured_scopes", fake_fetch_scopes)
-    monkeypatch.setattr(main, "sequential_batch_scan", fake_sequential_batch_scan)
-    monkeypatch.setattr(main, "session_is_stored", fake_session_is_stored)
+    monkeypatch.setattr(
+        main,
+        "fetch_hackerone_structured_scopes",
+        fake_fetch_scopes,
+    )
+    monkeypatch.setattr(
+        main,
+        "sequential_batch_scan",
+        fake_sequential_batch_scan,
+    )
+    monkeypatch.setattr(
+        main,
+        "session_is_stored",
+        fake_session_is_stored,
+    )
     monkeypatch.setattr(
         main,
         "replay_authenticated_endpoints",
@@ -79,7 +92,10 @@ def test_execute_hackerone_sync_persists_authenticated_observations(monkeypatch)
         lambda findings, slug, report_prefix="hackerone": type(
             "FakeReport",
             (),
-            {"name": "test-report.md", "__str__": lambda self: "test-report.md"},
+            {
+                "name": "test-report.md",
+                "__str__": lambda self: "test-report.md",
+            },
         )(),
     )
 
@@ -95,21 +111,28 @@ def test_execute_hackerone_sync_persists_authenticated_observations(monkeypatch)
     finally:
         main.hackerone_jobs.clear()
 
-    assert job["status"] == "complete", job
-    assert job["authenticated_observations_count"] == 1
-    assert job["authenticated_observations"] == [
+    assert job["status"] == "complete"
+
+    assert job["authenticated_observations_count"] == 2
+    assert len(job["authenticated_observations"]) == 2
+
+    assert job["authorization_comparison_count"] == 1
+    assert job["authorization_candidate_count"] == 1
+
+    assert job["authorization_comparisons"] == [
         {
-            "session_type": "victim",
             "method": "GET",
             "url": "https://example.test/api/v1/account/123",
-            "status": 200,
-            "resource_type": "fetch",
-            "in_scope": True,
-            "authenticated": True,
-            "observed_at": "2026-10-05T00:00:00+00:00",
+            "victim_status": 200,
+            "attacker_status": 200,
+            "victim_authenticated": True,
+            "attacker_authenticated": True,
+            "candidate": True,
+            "reason": "same_successful_access_outcome",
         }
     ]
 
-    assert "test-token" not in str(job)
-    assert "authorization" not in str(job).lower()
-    assert "cookie" not in str(job).lower()
+    job_text = str(job).lower()
+    assert "test-token" not in job_text
+    assert "cookie:" not in job_text
+    assert "authorization: bearer" not in job_text

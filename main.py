@@ -17,9 +17,11 @@ from pydantic import BaseModel, Field
 from program_intelligence import build_recommendations, fetch_scope_exclusions, fetch_structured_scopes
 
 from asset_inventory import AssetInventory
+from authorization_compare import compare_authenticated_observations
 from scope_policy import ScopePolicy
 
 from scanner import (
+    AuthenticatedObservation,
     autonomous_crawl_and_scan,
     bind_scan_context,
     harvest_session,
@@ -326,6 +328,9 @@ async def execute_hackerone_sync(
                 inventory=AssetInventory().to_dict(),
                 authenticated_observations=[],
                 authenticated_observations_count=0,
+                authorization_comparisons=[],
+                authorization_comparison_count=0,
+                authorization_candidate_count=0,
             )
             await publish(
                 job_id,
@@ -335,16 +340,6 @@ async def execute_hackerone_sync(
             return
 
         response_criteria = H1_RESPONSE_CRITERIA
-        if response_criteria:
-            await publish(
-                job_id,
-                f"[tokenswap] Batch response criteria configured as: {response_criteria!r}",
-            )
-        else:
-            await publish(
-                job_id,
-                "[tokenswap] No AUTHLEAK_RESPONSE_CRITERIA configured; Engine B will remain disabled for this H1 batch.",
-            )
 
         async def batch_log(message: str) -> None:
             await publish(job_id, message)
@@ -373,6 +368,8 @@ async def execute_hackerone_sync(
             reset_scan_context(context_token)
 
         authenticated_observations: list[dict[str, Any]] = []
+        victim_observations: list[AuthenticatedObservation] = []
+        attacker_observations: list[AuthenticatedObservation] = []
 
         for session_type in ("victim", "attacker"):
             if not session_is_stored(
@@ -392,13 +389,36 @@ async def execute_hackerone_sync(
                 scope_policy=scope_policy,
                 log_cb=batch_log,
             )
+
             authenticated_observations.extend(
                 observation.to_dict() for observation in observations
             )
 
+            if session_type == "victim":
+                victim_observations.extend(observations)
+            else:
+                attacker_observations.extend(observations)
+
+        authorization_comparisons = compare_authenticated_observations(
+            victim_observations,
+            attacker_observations,
+        )
+        authorization_comparison_records = [
+            comparison.to_dict()
+            for comparison in authorization_comparisons
+        ]
+        authorization_candidate_count = sum(
+            1
+            for comparison in authorization_comparisons
+            if comparison.candidate
+        )
+
         await publish(
             job_id,
-            f"[authenticated] Replay complete: {len(authenticated_observations)} observations.",
+            f"[authenticated] Replay complete: "
+            f"{len(authenticated_observations)} observations; "
+            f"{len(authorization_comparisons)} authorization comparisons; "
+            f"{authorization_candidate_count} manual-review candidates.",
         )
 
         report = write_markdown_report(findings, slug, report_prefix="hackerone")
@@ -411,6 +431,9 @@ async def execute_hackerone_sync(
             inventory=batch_inventory.to_dict(),
             authenticated_observations=authenticated_observations,
             authenticated_observations_count=len(authenticated_observations),
+            authorization_comparisons=authorization_comparison_records,
+            authorization_comparison_count=len(authorization_comparisons),
+            authorization_candidate_count=authorization_candidate_count,
             scope=scope_policy.describe(),
         )
         await publish(job_id, f"[complete] HackerOne batch finished; report: {report.name}")
@@ -637,6 +660,11 @@ async def hackerone_sync(config: HackerOneSyncConfig) -> dict[str, str]:
             "findings": [],
             "findings_count": 0,
             "report": None,
+            "authenticated_observations": [],
+            "authenticated_observations_count": 0,
+            "authorization_comparisons": [],
+            "authorization_comparison_count": 0,
+            "authorization_candidate_count": 0,
             "logs": [],
         }
         asyncio.create_task(execute_hackerone_sync(job_id, config.model_copy(update={"program_slug": slug})))
