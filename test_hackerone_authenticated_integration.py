@@ -129,6 +129,8 @@ def test_execute_hackerone_sync_persists_authenticated_comparison(monkeypatch):
             "attacker_authenticated": True,
             "candidate": True,
             "reason": "same_successful_access_outcome",
+            "response_structure_changed": False,
+            "response_differences": [],
         }
     ]
 

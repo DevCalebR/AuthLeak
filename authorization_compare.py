@@ -28,6 +28,8 @@ class AuthorizationComparison:
     attacker_authenticated: bool
     candidate: bool
     reason: str
+    response_structure_changed: bool = False
+    response_differences: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -39,7 +41,56 @@ class AuthorizationComparison:
             "attacker_authenticated": self.attacker_authenticated,
             "candidate": self.candidate,
             "reason": self.reason,
+            "response_structure_changed": self.response_structure_changed,
+            "response_differences": list(self.response_differences),
         }
+
+
+def compare_response_fingerprints(
+    victim_fingerprint: dict[str, object] | None,
+    attacker_fingerprint: dict[str, object] | None,
+) -> tuple[bool, tuple[str, ...]]:
+    """Compare sanitized response fingerprints without inspecting raw values.
+
+    The comparison uses only metadata and structural information produced by
+    ``response_fingerprint.fingerprint_response``. Raw response bodies,
+    credential values, cookies, and authorization material are never examined.
+    """
+    if victim_fingerprint is None or attacker_fingerprint is None:
+        return False, ()
+
+    differences: list[str] = []
+    structural_changes: list[str] = []
+
+    if victim_fingerprint.get("content_type") != attacker_fingerprint.get(
+        "content_type"
+    ):
+        differences.append("content_type")
+        structural_changes.append("content_type")
+
+    if victim_fingerprint.get("representation") != attacker_fingerprint.get(
+        "representation"
+    ):
+        differences.append("representation")
+        structural_changes.append("representation")
+
+    if victim_fingerprint.get("content_length") != attacker_fingerprint.get(
+        "content_length"
+    ):
+        differences.append("content_length")
+
+    if victim_fingerprint.get("shape") != attacker_fingerprint.get("shape"):
+        differences.append("shape")
+        structural_changes.append("shape")
+
+    victim_structure = tuple(victim_fingerprint.get("structure") or ())
+    attacker_structure = tuple(attacker_fingerprint.get("structure") or ())
+
+    if victim_structure != attacker_structure:
+        differences.append("structure")
+        structural_changes.append("structure")
+
+    return bool(structural_changes), tuple(differences)
 
 
 def _observation_key(
@@ -95,6 +146,13 @@ def compare_authenticated_observations(
         victim_status = victim.status
         attacker_status = attacker.status
 
+        response_structure_changed, response_differences = (
+            compare_response_fingerprints(
+                victim.response_fingerprint,
+                attacker.response_fingerprint,
+            )
+        )
+
         if victim_status is None or attacker_status is None:
             candidate = False
             reason = "incomplete_access_outcome"
@@ -121,6 +179,8 @@ def compare_authenticated_observations(
                 attacker_authenticated=attacker.authenticated,
                 candidate=candidate,
                 reason=reason,
+                response_structure_changed=response_structure_changed,
+                response_differences=response_differences,
             )
         )
 

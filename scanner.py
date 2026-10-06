@@ -33,6 +33,7 @@ from playwright.async_api import Request, Response, Route, async_playwright
 from authorization_compare import compare_authenticated_observations
 from asset_inventory import AssetInventory
 from scope_policy import ScopePolicy
+from response_fingerprint import fingerprint_response
 
 LogCallback = Callable[[str], Awaitable[None]]
 ProgressCallback = Callable[[dict[str, Any]], Awaitable[None]]
@@ -50,6 +51,7 @@ class AuthenticatedObservation:
     in_scope: bool = True
     authenticated: bool = False
     observed_at: str = ""
+    response_fingerprint: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -521,6 +523,7 @@ async def replay_authenticated_endpoints(
                         in_scope=True,
                         authenticated=True,
                         observed_at=observed_at,
+                        response_fingerprint=fingerprint_response(response).to_dict(),
                     )
                 )
             except Exception as error:

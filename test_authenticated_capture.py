@@ -29,6 +29,7 @@ def test_authenticated_observation_contains_metadata_only():
         "in_scope": True,
         "authenticated": True,
         "observed_at": "2026-10-04T22:00:00+00:00",
+        "response_fingerprint": None,
     }
 
 
@@ -78,6 +79,8 @@ def test_replay_authenticated_endpoints_uses_stored_session_without_exposing_cre
 
     class FakeResponse:
         status_code = 200
+        headers = {"content-type": "application/json"}
+        content = b'{"id":123,"name":"example"}'
 
     class FakeClient:
         def __init__(self, *args, **kwargs):
