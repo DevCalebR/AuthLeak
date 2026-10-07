@@ -119,6 +119,42 @@ def test_execute_hackerone_sync_persists_authenticated_comparison(monkeypatch):
     assert job["authorization_comparison_count"] == 1
     assert job["authorization_candidate_count"] == 1
 
+    assert job["authorization_triage_count"] == 1
+    assert len(job["authorization_triage"]) == 1
+    assert job["authorization_triage"] == [
+        {
+            "level": "medium",
+            "score": 30,
+            "reasons": [
+                "both_sessions_successful",
+            ],
+            "candidate": True,
+        }
+    ]
+
+    assert job["authorization_verification_artifact_count"] == 1
+    assert len(job["authorization_verification_artifacts"]) == 1
+    assert job["authorization_verification_artifacts"] == [
+        {
+            "method": "GET",
+            "url": "https://example.test/api/v1/account/123",
+            "victim_status": 200,
+            "attacker_status": 200,
+            "victim_authenticated": True,
+            "attacker_authenticated": True,
+            "candidate": True,
+            "candidate_reason": "same_successful_access_outcome",
+            "response_structure_changed": False,
+            "response_differences": [],
+            "triage_level": "medium",
+            "triage_score": 30,
+            "triage_reasons": [
+                "both_sessions_successful",
+            ],
+            "manual_verification_required": True,
+        }
+    ]
+
     assert job["authorization_comparisons"] == [
         {
             "method": "GET",

@@ -18,6 +18,8 @@ from program_intelligence import build_recommendations, fetch_scope_exclusions, 
 
 from asset_inventory import AssetInventory
 from authorization_compare import compare_authenticated_observations
+from authorization_triage import build_authorization_triage
+from authorization_verification import build_authorization_verification_artifact
 from scope_policy import ScopePolicy
 
 from scanner import (
@@ -331,6 +333,10 @@ async def execute_hackerone_sync(
                 authorization_comparisons=[],
                 authorization_comparison_count=0,
                 authorization_candidate_count=0,
+                authorization_triage=[],
+                authorization_triage_count=0,
+                authorization_verification_artifacts=[],
+                authorization_verification_artifact_count=0,
             )
             await publish(
                 job_id,
@@ -407,6 +413,25 @@ async def execute_hackerone_sync(
             comparison.to_dict()
             for comparison in authorization_comparisons
         ]
+
+        authorization_triage = [
+            build_authorization_triage(comparison)
+            for comparison in authorization_comparisons
+        ]
+        authorization_triage_records = [
+            triage.to_dict()
+            for triage in authorization_triage
+        ]
+
+        authorization_verification_artifacts = [
+            build_authorization_verification_artifact(comparison)
+            for comparison in authorization_comparisons
+        ]
+        authorization_verification_artifact_records = [
+            artifact.to_dict()
+            for artifact in authorization_verification_artifacts
+        ]
+
         authorization_candidate_count = sum(
             1
             for comparison in authorization_comparisons
@@ -418,9 +443,9 @@ async def execute_hackerone_sync(
             f"[authenticated] Replay complete: "
             f"{len(authenticated_observations)} observations; "
             f"{len(authorization_comparisons)} authorization comparisons; "
-            f"{authorization_candidate_count} manual-review candidates.",
+            f"{authorization_candidate_count} manual-review candidates; "
+            f"{len(authorization_verification_artifacts)} verification artifacts.",
         )
-
         report = write_markdown_report(findings, slug, report_prefix="hackerone")
         hackerone_jobs[job_id].update(
             status="complete",
@@ -434,6 +459,12 @@ async def execute_hackerone_sync(
             authorization_comparisons=authorization_comparison_records,
             authorization_comparison_count=len(authorization_comparisons),
             authorization_candidate_count=authorization_candidate_count,
+            authorization_triage=authorization_triage_records,
+            authorization_triage_count=len(authorization_triage),
+            authorization_verification_artifacts=authorization_verification_artifact_records,
+            authorization_verification_artifact_count=len(
+                authorization_verification_artifacts
+            ),
             scope=scope_policy.describe(),
         )
         await publish(job_id, f"[complete] HackerOne batch finished; report: {report.name}")
@@ -665,6 +696,10 @@ async def hackerone_sync(config: HackerOneSyncConfig) -> dict[str, str]:
             "authorization_comparisons": [],
             "authorization_comparison_count": 0,
             "authorization_candidate_count": 0,
+            "authorization_triage": [],
+            "authorization_triage_count": 0,
+            "authorization_verification_artifacts": [],
+            "authorization_verification_artifact_count": 0,
             "logs": [],
         }
         asyncio.create_task(execute_hackerone_sync(job_id, config.model_copy(update={"program_slug": slug})))
