@@ -18,6 +18,7 @@ from program_intelligence import build_recommendations, fetch_scope_exclusions, 
 
 from asset_inventory import AssetInventory
 from authorization_compare import compare_authenticated_observations
+from authorization_evidence import build_authorization_evidence
 from authorization_triage import build_authorization_triage
 from authorization_verification import build_authorization_verification_artifact
 from scope_policy import ScopePolicy
@@ -335,6 +336,8 @@ async def execute_hackerone_sync(
                 authorization_candidate_count=0,
                 authorization_triage=[],
                 authorization_triage_count=0,
+                authorization_evidence=[],
+                authorization_evidence_count=0,
                 authorization_verification_artifacts=[],
                 authorization_verification_artifact_count=0,
             )
@@ -423,6 +426,18 @@ async def execute_hackerone_sync(
             for triage in authorization_triage
         ]
 
+        authorization_evidence = [
+            build_authorization_evidence(comparison, triage)
+            for comparison, triage in zip(
+                authorization_comparisons,
+                authorization_triage,
+            )
+        ]
+        authorization_evidence_records = [
+            evidence.to_dict()
+            for evidence in authorization_evidence
+        ]
+
         authorization_verification_artifacts = [
             build_authorization_verification_artifact(comparison)
             for comparison in authorization_comparisons
@@ -461,6 +476,8 @@ async def execute_hackerone_sync(
             authorization_candidate_count=authorization_candidate_count,
             authorization_triage=authorization_triage_records,
             authorization_triage_count=len(authorization_triage),
+            authorization_evidence=authorization_evidence_records,
+            authorization_evidence_count=len(authorization_evidence),
             authorization_verification_artifacts=authorization_verification_artifact_records,
             authorization_verification_artifact_count=len(
                 authorization_verification_artifacts
@@ -692,12 +709,16 @@ async def hackerone_sync(config: HackerOneSyncConfig) -> dict[str, str]:
             "findings_count": 0,
             "report": None,
             "authenticated_observations": [],
+            "authorization_evidence": [],
+            "authorization_evidence_count": 0,
             "authenticated_observations_count": 0,
             "authorization_comparisons": [],
             "authorization_comparison_count": 0,
             "authorization_candidate_count": 0,
             "authorization_triage": [],
             "authorization_triage_count": 0,
+            "authorization_evidence": [],
+            "authorization_evidence_count": 0,
             "authorization_verification_artifacts": [],
             "authorization_verification_artifact_count": 0,
             "logs": [],
