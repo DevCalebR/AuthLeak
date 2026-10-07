@@ -876,66 +876,38 @@ async def autonomous_crawl_and_scan(
                         for api_url, method in discovered_apis.items():
                             method = method.upper()
 
-                            if method not in SAFE_METHODS:
-                                continue
-
-                            if scope_policy is not None and not scope_policy.allows(api_url):
-                                inventory.record_blocked(api_url)
-                                await _emit(
-                                    log_cb,
-                                    f"[scope] TokenSwap blocked out-of-scope API: {api_url}",
-                                )
-                                continue
-
                             await _emit(
                                 log_cb,
                                 f"[tokenswap] Checking {api_url}",
                             )
 
-                            observed_at = datetime.now(timezone.utc).isoformat()
+                            victim_observation = await _replay_authenticated_endpoint(
+                                client,
+                                inventory,
+                                "victim",
+                                method,
+                                api_url,
+                                "api",
+                                victim_headers,
+                                scope_policy=scope_policy,
+                                log_cb=log_cb,
+                            )
+                            if victim_observation is not None:
+                                victim_observations.append(victim_observation)
 
-                            try:
-                                victim_response = await client.request(
-                                    method,
-                                    api_url,
-                                    headers=victim_headers,
-                                )
-                                victim_observations.append(
-                                    AuthenticatedObservation(
-                                        session_type="victim",
-                                        method=method,
-                                        url=api_url,
-                                        status=victim_response.status_code,
-                                        resource_type="api",
-                                        in_scope=True,
-                                        authenticated=True,
-                                        observed_at=observed_at,
-                                    )
-                                )
-
-                                attacker_response = await client.request(
-                                    method,
-                                    api_url,
-                                    headers=attacker_headers,
-                                )
-                                attacker_observations.append(
-                                    AuthenticatedObservation(
-                                        session_type="attacker",
-                                        method=method,
-                                        url=api_url,
-                                        status=attacker_response.status_code,
-                                        resource_type="api",
-                                        in_scope=True,
-                                        authenticated=True,
-                                        observed_at=observed_at,
-                                    )
-                                )
-
-                            except Exception as error:
-                                await _emit(
-                                    log_cb,
-                                    f"[tokenswap] Request failed for {api_url}: {error}",
-                                )
+                            attacker_observation = await _replay_authenticated_endpoint(
+                                client,
+                                inventory,
+                                "attacker",
+                                method,
+                                api_url,
+                                "api",
+                                attacker_headers,
+                                scope_policy=scope_policy,
+                                log_cb=log_cb,
+                            )
+                            if attacker_observation is not None:
+                                attacker_observations.append(attacker_observation)
 
                     comparisons = compare_authenticated_observations(
                         victim_observations,
