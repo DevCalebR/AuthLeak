@@ -442,6 +442,74 @@ def _merge_headers(base: dict[str, str], overlay: dict[str, str]) -> dict[str, s
         merged[key] = value
     return merged
 
+async def _replay_authenticated_endpoint(
+    client: httpx.AsyncClient,
+    inventory: AssetInventory,
+    session_type: SessionType,
+    method: str,
+    url: str,
+    resource_type: str,
+    session_headers: dict[str, str],
+    *,
+    scope_policy: ScopePolicy | None = None,
+    log_cb: LogCallback | None = None,
+) -> AuthenticatedObservation | None:
+    """Replay one safe authenticated endpoint and return sanitized metadata.
+
+    This is the canonical authenticated HTTP replay primitive. It performs
+    scope enforcement before network access, permits only safe methods, keeps
+    credentials private to the request, and stores only sanitized response
+    metadata in the observation.
+    """
+    method = method.upper()
+
+    if method not in SAFE_METHODS:
+        return None
+
+    if scope_policy is not None and not scope_policy.allows(url):
+        inventory.record_blocked(url)
+        if log_cb:
+            await _emit(
+                log_cb,
+                f"[scope] Authenticated replay blocked: {url}",
+            )
+        return None
+
+    if log_cb:
+        await _emit(
+            log_cb,
+            f"[authenticated] {session_type} {method} {url}",
+        )
+
+    observed_at = datetime.now(timezone.utc).isoformat()
+
+    try:
+        response = await client.request(
+            method,
+            url,
+            headers=session_headers,
+        )
+    except Exception as error:
+        if log_cb:
+            await _emit(
+                log_cb,
+                f"[authenticated] Request failed for {url}: {error}",
+            )
+        return None
+
+    return AuthenticatedObservation(
+        session_type=session_type,
+        method=method,
+        url=url,
+        status=response.status_code,
+        resource_type=resource_type,
+        in_scope=True,
+        authenticated=True,
+        observed_at=observed_at,
+        response_fingerprint=fingerprint_response(response).to_dict(),
+    )
+
+
 async def replay_authenticated_endpoints(
     inventory: AssetInventory,
     session_type: SessionType,
@@ -484,54 +552,20 @@ async def replay_authenticated_endpoints(
         headers={"User-Agent": "AuthLeak/1.3 (+authorized-security-testing)"},
     ) as client:
         for endpoint in endpoints:
-            method = endpoint.method.upper()
+            observation = await _replay_authenticated_endpoint(
+                client,
+                inventory,
+                session_type,
+                endpoint.method,
+                endpoint.url,
+                endpoint.resource_type,
+                session_headers,
+                scope_policy=scope_policy,
+                log_cb=log_cb,
+            )
 
-            if method not in SAFE_METHODS:
-                continue
-
-            if scope_policy is not None and not scope_policy.allows(endpoint.url):
-                inventory.record_blocked(endpoint.url)
-                if log_cb:
-                    await _emit(
-                        log_cb,
-                        f"[scope] Authenticated replay blocked: {endpoint.url}",
-                    )
-                continue
-
-            if log_cb:
-                await _emit(
-                    log_cb,
-                    f"[authenticated] {session_type} {method} {endpoint.url}",
-                )
-
-            observed_at = datetime.now(timezone.utc).isoformat()
-
-            try:
-                response = await client.request(
-                    method,
-                    endpoint.url,
-                    headers=session_headers,
-                )
-
-                observations.append(
-                    AuthenticatedObservation(
-                        session_type=session_type,
-                        method=method,
-                        url=endpoint.url,
-                        status=response.status_code,
-                        resource_type=endpoint.resource_type,
-                        in_scope=True,
-                        authenticated=True,
-                        observed_at=observed_at,
-                        response_fingerprint=fingerprint_response(response).to_dict(),
-                    )
-                )
-            except Exception as error:
-                if log_cb:
-                    await _emit(
-                        log_cb,
-                        f"[authenticated] Request failed for {endpoint.url}: {error}",
-                    )
+            if observation is not None:
+                observations.append(observation)
 
     return observations
 
